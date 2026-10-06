@@ -334,7 +334,7 @@
         planet-inspector
         auto-texture-gltf
         class="clickable"
-        animation-mixer="clip: *; loop: repeat; timeScale: 1;"
+        animation-mixer="clip: *; loop: pingpong; repetitions: Infinity; timeScale: 1;"
         position="0 0 0">
       </a-entity>
 
@@ -430,19 +430,12 @@
         <p class="text-[11px] text-slate-300">Markerless WebXR Hit-Test Tracking</p>
       </div>
 
-      <!-- AR ENTRY BUTTON -->
-      <div class="flex items-center gap-2 pointer-events-auto">
-        <button id="btn-start-ar" onclick="enterARMode()" class="glass-panel bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-400/50 px-4 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg active:scale-95 text-xs sm:text-sm">
-          <i class="fa-solid fa-vr-cardboard text-base"></i>
-          <span>Start AR</span>
-        </button>
-      </div>
     </div>
 
     <!-- FLOATING INSTRUCTION BADGE -->
     <div class="self-center my-auto pointer-events-auto">
       <div id="instruction-text" class="glass-panel px-5 py-2.5 rounded-full text-xs sm:text-sm text-cyan-200 font-medium border border-cyan-500/30 shadow-xl transition-all duration-300 text-center">
-        3D Interactive Mode — Click any planet to inspect info or tap "Start AR"
+        3D Interactive Mode — Click any planet to inspect info
       </div>
     </div>
 
@@ -643,41 +636,6 @@
       placedSystem.setAttribute('visible', 'true');
     }
 
-    function enterARMode() {
-      const scene = document.querySelector('a-scene');
-      const instructionText = document.querySelector('#instruction-text');
-
-      if (!scene || typeof scene.enterVR !== 'function') {
-        console.error('WebXR scene is not ready for AR.');
-        if (instructionText) instructionText.innerText = 'WebXR is not ready. Please reload and try again.';
-        return;
-      }
-
-      if (!navigator.xr) {
-        console.error('WebXR is unavailable. AR requires a supported browser and a secure connection.');
-        if (instructionText) {
-          instructionText.innerText = 'AR requires a WebXR-compatible browser and a secure connection (HTTPS).';
-        }
-        return;
-      }
-
-      try {
-        Promise.resolve(scene.enterVR()).catch((error) => {
-          console.error('Unable to start the AR session:', error);
-          if (instructionText) {
-            instructionText.style.opacity = '1';
-            instructionText.innerText = 'Could not start AR. Check browser support and camera permissions.';
-          }
-        });
-      } catch (error) {
-        console.error('Unable to start the AR session:', error);
-        if (instructionText) {
-          instructionText.style.opacity = '1';
-          instructionText.innerText = 'Could not start AR. Check browser support and camera permissions.';
-        }
-      }
-    }
-
     /* -------------------------------------------------------------
        SAFE GLTF MODEL LOADER
        Prevents Request constructor invalid URL errors in iframe previews
@@ -746,20 +704,6 @@
 
       // Attempt safe default model loading
       tryLoadDefaultModel();
-      
-      sceneEl.addEventListener('enter-vr', () => {
-        if (sceneEl.is('ar-mode')) {
-          document.querySelector('#space-sky').setAttribute('visible', 'false');
-          document.querySelector('#btn-start-ar').classList.add('hidden');
-          document.querySelector('#instruction-text').innerText = "Point camera at a flat floor surface to place";
-        }
-      });
-
-      sceneEl.addEventListener('exit-vr', () => {
-        document.querySelector('#space-sky').setAttribute('visible', 'true');
-        document.querySelector('#btn-start-ar').classList.remove('hidden');
-        document.querySelector('#instruction-text').innerText = "3D Interactive Mode — Click any planet to inspect info";
-      });
     });
   </script>
 
