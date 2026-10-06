@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>WebXR AR Solar System Explorer</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- A-Frame 1.4.2 (supports WebXR Hit Test natively) -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
+  <!-- A-Frame Extras (Provides GLTF animation-mixer for embedded GLTF animations) -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    /* Custom UI Styling */
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    /* Glassmorphism Effect */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* Hide standard A-Frame default VR button (we use custom WebXR button) */
+    .a-enter-vr {
+      display: none !important;
+    }
+
+    /* Reticle Pulsing Animation for AR Surface Detection */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    
+    .reticle-pulse {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+  </style>
+
+  <script>
+    /* -------------------------------------------------------------
+       CUSTOM A-FRAME COMPONENT: Orbital Revolution Animation (Fallback)
+       ------------------------------------------------------------- */
+    AFRAME.registerComponent('orbit-anim', {
+      schema: {
+        speed: { type: 'number', default: 1 }
+      },
+      init: function () {
+        this.angle = Math.random() * Math.PI * 2;
+      },
+      tick: function (time, timeDelta) {
+        if (window.orbitsPaused) return;
+        const deltaSeconds = (timeDelta || 16) / 1000;
+        const speedMultiplier = this.data.speed * 0.15;
+        this.el.object3D.rotation.y += speedMultiplier * deltaSeconds;
+      }
+    });
+
+    /* -------------------------------------------------------------
+       CUSTOM A-FRAME COMPONENT: AR Markerless Surface Hit-Test & Placer
+       ------------------------------------------------------------- */
+    AFRAME.registerComponent('ar-hit-test-placer', {
+      init: function () {
+        this.reticle = document.querySelector('#ar-reticle');
+        this.placedContainer = document.querySelector('#placed-solar-system');
+        this.instructionText = document.querySelector('#instruction-text');
+        this.isPlaced = false;
+
+        // WebXR screen tap placement
+        if (this.el.sceneEl) {
+          this.el.sceneEl.addEventListener('select', this.onSelect.bind(this));
+        }
+
+        // Screen click fallback for AR surface placement
+        window.addEventListener('click', (e) => {
+          try {
+            if (e.target.closest('#ui-overlay') || e.target.closest('#hud-panel')) return;
+            
+            if (this.el.sceneEl && this.el.sceneEl.is('ar-mode') && this.reticle && this.reticle.getAttribute('visible')) {
+              this.placeModel();
+            }
+          } catch (err) {
+            console.warn('AR placement error:', err);
+          }
+        });
+      },
+
+      tick: function () {
+        try {
+          if (this.el.sceneEl && this.el.sceneEl.is('ar-mode')) {
+            if (this.reticle && this.reticle.getAttribute('visible')) {
+              if (!this.isPlaced && this.instructionText) {
+                this.instructionText.innerText = "Surface detected! Tap screen to place Solar System";
+                this.instructionText.className = "glass-panel px-6 py-3 rounded-full text-sm font-medium border shadow-xl transition-all duration-300 text-center bg-cyan-500/30 border-cyan-400 text-cyan-200";
+              }
+            } else if (!this.isPlaced && this.instructionText) {
+              this.instructionText.innerText = "Point camera at floor or table to scan surface...";
+              this.instructionText.className = "glass-panel px-6 py-3 rounded-full text-sm font-medium border shadow-xl transition-all duration-300 text-center bg-amber-500/30 border-amber-400 text-amber-200";
+            }
+          }
+        } catch(e) {}
+      },
+
+      onSelect: function () {
+        if (this.el.sceneEl && this.el.sceneEl.is('ar-mode') && this.reticle && this.reticle.getAttribute('visible')) {
+          this.placeModel();
+        }
+      },
+
+      placeModel: function () {
+        const position = this.reticle.getAttribute('position');
+        this.placedContainer.setAttribute('position', position);
+        this.placedContainer.setAttribute('visible', 'true');
+        this.isPlaced = true;
+
+        if (this.instructionText) {
+          this.instructionText.innerText = "Solar System Placed! Tap any planet to inspect details.";
+          setTimeout(() => {
+            if (this.instructionText) this.instructionText.style.opacity = '0';
+          }, 3500);
+        }
+      }
+    });
+
+    /* -------------------------------------------------------------
+       CUSTOM COMPONENT: GLTF Sub-Mesh Planet Inspector Raycaster
+       ------------------------------------------------------------- */
+    AFRAME.registerComponent('planet-inspector', {
+      init: function () {
+        this.el.addEventListener('click', (evt) => {
+          let detectedName = "Unknown";
+
+          try {
+            if (evt.detail && evt.detail.intersection && evt.detail.intersection.object) {
+              let currentObj = evt.detail.intersection.object;
+              
+              // Traverse up GLTF object hierarchy to match planet names or node IDs
+              while (currentObj) {
+                const name = currentObj.name || "";
+                const parsed = parsePlanetName(name);
+                
+                if (parsed !== "Unknown") {
+                  detectedName = parsed;
+                  break;
+                }
+                currentObj = currentObj.parent;
+              }
+
+              // Fallback to HTML data attribute if not resolved from GLTF mesh name
+              if (detectedName === "Unknown" && this.el.hasAttribute('data-name')) {
+                detectedName = this.el.getAttribute('data-name');
+              }
+            } else if (this.el.hasAttribute('data-name')) {
+              detectedName = this.el.getAttribute('data-name');
+            }
+          } catch(err) {
+            console.warn('Raycast inspection error:', err);
+          }
+
+          if (detectedName !== "Unknown") {
+            window.showPlanetInfo(detectedName);
+          }
+        });
+      }
+    });
+
+    /* -------------------------------------------------------------
+       CUSTOM COMPONENT: Auto-Texture Mapper for GLTF Sub-Meshes
+       Maps JPEG texture files from Assets/textures/ to GLTF planet nodes
+       ------------------------------------------------------------- */
+    AFRAME.registerComponent('auto-texture-gltf', {
+      init: function () {
+        this.el.addEventListener('model-loaded', () => {
+          const mesh = this.el.getObject3D('mesh');
+          if (!mesh) return;
+
+          this.el.object3D.scale.set(1, 1, 1);
+          this.el.object3D.updateMatrixWorld(true);
+          mesh.updateMatrixWorld(true);
+
+          const bounds = new THREE.Box3().setFromObject(mesh);
+          const size = bounds.getSize(new THREE.Vector3());
+          const parentScale = this.el.object3D.parent
+            ? this.el.object3D.parent.getWorldScale(new THREE.Vector3())
+            : new THREE.Vector3(1, 1, 1);
+          const largestDimension = Math.max(size.x, size.y, size.z);
+          const largestParentScale = Math.max(
+            Math.abs(parentScale.x),
+            Math.abs(parentScale.y),
+            Math.abs(parentScale.z)
+          );
+
+          if (largestDimension > 0 && Number.isFinite(largestDimension)) {
+            this.el.object3D.scale.setScalar((10 * largestParentScale) / largestDimension);
+            this.el.object3D.updateMatrixWorld(true);
+          }
+
+          const textureLoader = new THREE.TextureLoader();
+          const textureMap = {
+            'sun': 'Assets/textures/material_baseColor.jpeg',
+            'mercury': 'Assets/textures/mercury_baseColor.jpeg',
+            'venus': 'Assets/textures/venus_baseColor.jpeg',
+            'earth': 'Assets/textures/earth_baseColor.jpeg',
+            'erath': 'Assets/textures/earth_baseColor.jpeg',
+            'moon': 'Assets/textures/moon_baseColor.jpeg',
+            'mars': 'Assets/textures/mars_baseColor.jpeg',
+            'jupiter': 'Assets/textures/jupiter_baseColor.jpeg',
+            'ring': 'Assets/textures/saturn_ring_baseColor.png',
+            'saturn': 'Assets/textures/saturn_baseColor.jpeg',
+            'uranus': 'Assets/textures/uranus_baseColor.jpeg',
+            'neptune': 'Assets/textures/neptune_baseColor.jpeg'
+          };
+          const textureKeys = Object.keys(textureMap);
+
+          mesh.traverse((node) => {
+            if (!node.isMesh) return;
+
+            let textureKey = null;
+            let currentNode = node;
+            while (currentNode && currentNode !== mesh.parent && !textureKey) {
+              const lowerName = (currentNode.name || '').toLowerCase();
+              if (!lowerName.includes('beziercircle')) {
+                textureKey = textureKeys.find((key) => lowerName.includes(key));
+              }
+              currentNode = currentNode.parent;
+            }
+
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            if (!textureKey) {
+              const materialName = materials.map((material) => (material && material.name || '').toLowerCase()).join(' ');
+              textureKey = textureKeys.find((key) => materialName.includes(key));
+            }
+
+            const texturePath = textureKey && textureMap[textureKey];
+            if (texturePath && materials.some(Boolean)) {
+              textureLoader.load(texturePath, (texture) => {
+                texture.flipY = false;
+                if (THREE.SRGBColorSpace) {
+                  texture.colorSpace = THREE.SRGBColorSpace;
+                } else if (THREE.sRGBEncoding !== undefined) {
+                  texture.encoding = THREE.sRGBEncoding;
+                }
+                materials.forEach((material) => {
+                  if (!material) return;
+                  material.map = texture;
+                  material.needsUpdate = true;
+                });
+              }, undefined, (error) => {
+                console.error(`Failed to load planet texture "${texturePath}":`, error);
+              });
+            }
+          });
+        });
+      }
+    });
+
+    /* Helper function to map GLTF node/mesh names or indices to standard planet names */
+    function parsePlanetName(rawName) {
+      if (!rawName) return "Unknown";
+      const name = rawName.toLowerCase();
+
+      // Mapping known node patterns from Solar System GLTF models
+      if (name.includes('sun') || name.includes('node_53') || name.includes('node_32')) return 'Sun';
+      if (name.includes('mercury') || name.includes('node_3')) return 'Mercury';
+      if (name.includes('venus') || name.includes('node_6')) return 'Venus';
+      if (name.includes('earth') || name.includes('erath') || name.includes('node_9')) return 'Earth';
+      if (name.includes('moon') || name.includes('node_12')) return 'Moon';
+      if (name.includes('mars') || name.includes('node_15')) return 'Mars';
+      if (name.includes('jupiter') || name.includes('node_18') || name.includes('node_23')) return 'Jupiter';
+      if (name.includes('saturn') || name.includes('node_26') || name.includes('node_29')) return 'Saturn';
+      if (name.includes('uranus') || name.includes('node_35') || name.includes('node_37')) return 'Uranus';
+      if (name.includes('neptune') || name.includes('node_39') || name.includes('node_41')) return 'Neptune';
+      if (name.includes('pluto') || name.includes('node_43') || name.includes('node_45')) return 'Pluto';
+
+      return "Unknown";
+    }
+  </script>
+</head>
+
+<body class="bg-slate-950 text-white overflow-hidden">
+
+  <!-- A-FRAME 3D/AR SCENE -->
+  <a-scene
+    webxr="optionalFeatures: hit-test, local-floor, DOM Overlay; overlayElement: #ui-overlay; requiredFeatures: hit-test"
+    ar-hit-test="target: #ar-reticle; type: floor"
+    ar-hit-test-placer
+    raycaster="objects: .clickable, [gltf-model]"
+    cursor="rayOrigin: mouse"
+    renderer="colorManagement: true; antialias: true; exposure: 1.2;"
+    vr-mode-ui="enabled: false">
+
+    <!-- PLANET TEXTURE ASSETS -->
+    <a-assets>
+      <img id="tex-sun" src="Assets/textures/material_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-mercury" src="Assets/textures/mercury_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-venus" src="Assets/textures/venus_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-earth" src="Assets/textures/earth_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-moon" src="Assets/textures/moon_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-mars" src="Assets/textures/mars_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-jupiter" src="Assets/textures/jupiter_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-saturn" src="Assets/textures/saturn_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-saturn-ring" src="Assets/textures/saturn_ring_baseColor.png" crossorigin="anonymous">
+      <img id="tex-uranus" src="Assets/textures/uranus_baseColor.jpeg" crossorigin="anonymous">
+      <img id="tex-neptune" src="Assets/textures/neptune_baseColor.jpeg" crossorigin="anonymous">
+    </a-assets>
+
+    <!-- AR SURFACE TARGET RETICLE -->
+    <a-entity id="ar-reticle" visible="false">
+      <a-ring rotation="-90 0 0" radius-inner="0.18" radius-outer="0.22" color="#06b6d4" material="shader: flat; opacity: 0.8; transparent: true"></a-ring>
+      <a-circle rotation="-90 0 0" radius="0.04" color="#22d3ee" material="shader: flat; opacity: 0.9; transparent: true"></a-circle>
+      <a-ring rotation="-90 0 0" radius-inner="0.28" radius-outer="0.30" color="#38bdf8" material="shader: flat; opacity: 0.4; transparent: true" class="reticle-pulse"></a-ring>
+    </a-entity>
+
+    <!-- PLACED SOLAR SYSTEM CONTAINER -->
+    <a-entity id="placed-solar-system" position="0 1.2 -2.5" scale="0.35 0.35 0.35">
+
+      <!-- 1. CUSTOM GLTF MODEL CONTAINER WITH AUTO TEXTURING -->
+      <a-entity 
+        id="user-gltf-model" 
+        planet-inspector
+        auto-texture-gltf
+        class="clickable"
+        animation-mixer="clip: *; loop: repeat; timeScale: 1;"
+        position="0 0 0">
+      </a-entity>
+
+      <!-- 2. PROCEDURAL 3D FALLBACK SOLAR SYSTEM WITH REALISTIC TEXTURES -->
+      <a-entity id="fallback-solar-system" visible="true">
+        
+        <!-- SUN -->
+        <a-sphere id="sun_node" class="clickable" planet-inspector data-name="Sun" radius="0.55" src="#tex-sun" material="emissive: #fbbf24; emissiveIntensity: 0.2; shader: standard">
+          <a-light type="point" intensity="1.8" distance="12" color="#fef3c7"></a-light>
+        </a-sphere>
+
+        <!-- MERCURY -->
+        <a-entity orbit-anim="speed: 4">
+          <a-sphere class="clickable" planet-inspector data-name="Mercury" position="0.9 0 0" radius="0.05" src="#tex-mercury" material="roughness: 0.8; metalness: 0.1;"></a-sphere>
+          <a-ring rotation="90 0 0" radius-inner="0.89" radius-outer="0.91" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- VENUS -->
+        <a-entity orbit-anim="speed: 3">
+          <a-sphere class="clickable" planet-inspector data-name="Venus" position="1.3 0 0" radius="0.08" src="#tex-venus" material="roughness: 0.7; metalness: 0.1;"></a-sphere>
+          <a-ring rotation="90 0 0" radius-inner="1.29" radius-outer="1.31" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- EARTH & MOON -->
+        <a-entity orbit-anim="speed: 2">
+          <a-entity position="1.8 0 0">
+            <a-sphere class="clickable" planet-inspector data-name="Earth" radius="0.1" src="#tex-earth" material="roughness: 0.6; metalness: 0.1;"></a-sphere>
+            <a-entity orbit-anim="speed: 8">
+              <a-sphere class="clickable" planet-inspector data-name="Moon" position="0.2 0 0" radius="0.025" src="#tex-moon" material="roughness: 0.9; metalness: 0.1;"></a-sphere>
+            </a-entity>
+          </a-entity>
+          <a-ring rotation="90 0 0" radius-inner="1.79" radius-outer="1.81" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- MARS -->
+        <a-entity orbit-anim="speed: 1.5">
+          <a-sphere class="clickable" planet-inspector data-name="Mars" position="2.3 0 0" radius="0.07" src="#tex-mars" material="roughness: 0.8; metalness: 0.1;"></a-sphere>
+          <a-ring rotation="90 0 0" radius-inner="2.29" radius-outer="2.31" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- JUPITER -->
+        <a-entity orbit-anim="speed: 0.8">
+          <a-sphere class="clickable" planet-inspector data-name="Jupiter" position="3.1 0 0" radius="0.22" src="#tex-jupiter" material="roughness: 0.7; metalness: 0.1;"></a-sphere>
+          <a-ring rotation="90 0 0" radius-inner="3.09" radius-outer="3.11" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- SATURN -->
+        <a-entity orbit-anim="speed: 0.5">
+          <a-entity position="3.9 0 0">
+            <a-sphere class="clickable" planet-inspector data-name="Saturn" radius="0.18" src="#tex-saturn" material="roughness: 0.7; metalness: 0.1;"></a-sphere>
+            <a-ring rotation="75 0 0" radius-inner="0.24" radius-outer="0.38" src="#tex-saturn-ring" material="shader: flat; opacity: 0.85; side: double; transparent: true"></a-ring>
+          </a-entity>
+          <a-ring rotation="90 0 0" radius-inner="3.89" radius-outer="3.91" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- URANUS -->
+        <a-entity orbit-anim="speed: 0.3">
+          <a-sphere class="clickable" planet-inspector data-name="Uranus" position="4.6 0 0" radius="0.13" src="#tex-uranus" material="roughness: 0.7; metalness: 0.1;"></a-sphere>
+          <a-ring rotation="90 0 0" radius-inner="4.59" radius-outer="4.61" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+        <!-- NEPTUNE -->
+        <a-entity orbit-anim="speed: 0.2">
+          <a-sphere class="clickable" planet-inspector data-name="Neptune" position="5.2 0 0" radius="0.12" src="#tex-neptune" material="roughness: 0.7; metalness: 0.1;"></a-sphere>
+          <a-ring rotation="90 0 0" radius-inner="5.19" radius-outer="5.21" color="#475569" material="shader: flat; opacity: 0.3"></a-ring>
+        </a-entity>
+
+      </a-entity>
+    </a-entity>
+
+    <!-- LIGHTING & SKY BACKGROUND -->
+    <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
+    <a-light type="directional" position="5 10 7" intensity="1.2" light="castShadow: true"></a-light>
+    <a-sky id="space-sky" color="#030712"></a-sky>
+
+    <!-- CAMERA RIG -->
+    <a-entity id="camera-rig" position="0 0 0">
+      <a-camera id="main-camera" look-controls="pointerLockEnabled: false" wasd-controls="fly: false"></a-camera>
+    </a-entity>
+
+  </a-scene>
+
+  <!-- UI OVERLAY LAYER -->
+  <div id="ui-overlay" class="fixed inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
+
+    <!-- TOP BAR -->
+    <div class="flex justify-between items-start w-full gap-2">
+      <div class="glass-panel p-3 md:p-4 rounded-2xl pointer-events-auto max-w-xs md:max-w-sm">
+        <div class="flex items-center gap-2 text-cyan-400 mb-1">
+          <i class="fa-solid fa-orbit text-lg"></i>
+          <h1 class="font-bold text-base md:text-lg leading-none">AR Solar System Explorer</h1>
+        </div>
+        <p class="text-[11px] text-slate-300">Markerless WebXR Hit-Test Tracking</p>
+      </div>
+
+      <!-- AR ENTRY BUTTON -->
+      <div class="flex items-center gap-2 pointer-events-auto">
+        <button id="btn-start-ar" onclick="enterARMode()" class="glass-panel bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-400/50 px-4 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg active:scale-95 text-xs sm:text-sm">
+          <i class="fa-solid fa-vr-cardboard text-base"></i>
+          <span>Start AR</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- FLOATING INSTRUCTION BADGE -->
+    <div class="self-center my-auto pointer-events-auto">
+      <div id="instruction-text" class="glass-panel px-5 py-2.5 rounded-full text-xs sm:text-sm text-cyan-200 font-medium border border-cyan-500/30 shadow-xl transition-all duration-300 text-center">
+        3D Interactive Mode — Click any planet to inspect info or tap "Start AR"
+      </div>
+    </div>
+
+    <!-- BOTTOM HUD PANEL -->
+    <div id="hud-panel" class="w-full max-w-xl mx-auto flex flex-col gap-3 pointer-events-auto">
+
+      <!-- PLANET INFORMATION MODAL CARD -->
+      <div id="planet-card" class="glass-panel p-4 md:p-5 rounded-3xl border-slate-700/80 hidden transition-all shadow-2xl">
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <span class="text-[10px] tracking-widest text-cyan-400 font-mono uppercase font-semibold">Celestial Object</span>
+            <h2 id="planet-title" class="text-2xl font-black text-white">Earth</h2>
+          </div>
+          <button onclick="hidePlanetInfo()" class="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <p id="planet-desc" class="text-xs md:text-sm text-slate-300 leading-relaxed mb-3">
+          Third planet from the Sun and the only astronomical object known to harbor life.
+        </p>
+        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+          <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/50">
+            <span class="block text-slate-400 text-[10px] font-medium">TYPE</span>
+            <span id="planet-type" class="font-bold text-cyan-300">Terrestrial</span>
+          </div>
+          <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/50">
+            <span class="block text-slate-400 text-[10px] font-medium">DISTANCE</span>
+            <span id="planet-dist" class="font-bold text-cyan-300">1.00 AU</span>
+          </div>
+          <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/50">
+            <span class="block text-slate-400 text-[10px] font-medium">MOONS</span>
+            <span id="planet-moons" class="font-bold text-cyan-300">1</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AR CONTROLS & SCALE BAR -->
+      <div class="glass-panel p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg">
+        <div class="flex items-center gap-2">
+          <button onclick="toggleOrbits()" id="btn-orbits" class="px-3 py-2 bg-slate-800/90 hover:bg-slate-700 text-xs rounded-xl font-semibold flex items-center gap-1.5 transition active:scale-95">
+            <i class="fa-solid fa-pause text-cyan-400"></i>
+            <span>Orbits</span>
+          </button>
+          <button onclick="resetPosition()" class="px-3 py-2 bg-slate-800/90 hover:bg-slate-700 text-xs rounded-xl font-semibold flex items-center gap-1.5 transition active:scale-95">
+            <i class="fa-solid fa-rotate-right text-cyan-400"></i>
+            <span>Reset Pos</span>
+          </button>
+        </div>
+
+        <!-- MODEL SCALE SLIDER -->
+        <div class="flex items-center gap-2 flex-1 max-w-xs px-1">
+          <i class="fa-solid fa-expand text-xs text-slate-400"></i>
+          <span class="text-[10px] text-slate-400 font-mono">Scale</span>
+          <input type="range" id="scale-slider" min="0.05" max="1.2" step="0.05" value="0.35" oninput="updateScale(this.value)" class="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg appearance-none">
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /* -------------------------------------------------------------
+       PLANET DATABASE
+       ------------------------------------------------------------- */
+    const planetData = {
+      "Sun": {
+        desc: "The star at the center of our Solar System. It contains 99.86% of the mass in the Solar System.",
+        type: "Yellow Dwarf",
+        dist: "0.00 AU",
+        moons: "0"
+      },
+      "Mercury": {
+        desc: "The smallest planet in the Solar System and closest to the Sun. Highly cratered with extreme temperature variations.",
+        type: "Terrestrial",
+        dist: "0.39 AU",
+        moons: "0"
+      },
+      "Venus": {
+        desc: "Has a thick toxic atmosphere trapping heat in a runaway greenhouse effect, making it the hottest planet.",
+        type: "Terrestrial",
+        dist: "0.72 AU",
+        moons: "0"
+      },
+      "Earth": {
+        desc: "Our home planet. The only astronomical world known to harbor liquid oceans and life.",
+        type: "Terrestrial",
+        dist: "1.00 AU",
+        moons: "1"
+      },
+      "Moon": {
+        desc: "Earth's natural satellite. It stabilizes Earth's axial wobble and creates ocean tides.",
+        type: "Satellite",
+        dist: "1.00 AU",
+        moons: "N/A"
+      },
+      "Mars": {
+        desc: "A dusty, cold desert world with a thin carbon dioxide atmosphere and giant extinct volcanoes.",
+        type: "Terrestrial",
+        dist: "1.52 AU",
+        moons: "2"
+      },
+      "Jupiter": {
+        desc: "The largest planet in the Solar System, more than twice as massive as all other planets combined.",
+        type: "Gas Giant",
+        dist: "5.20 AU",
+        moons: "95"
+      },
+      "Saturn": {
+        desc: "Famous for its expansive and stunning ring system composed of billions of chunks of ice and rock.",
+        type: "Gas Giant",
+        dist: "9.58 AU",
+        moons: "146"
+      },
+      "Uranus": {
+        desc: "An ice giant that rotates on a nearly 98-degree tilt, orbiting the Sun practically on its side.",
+        type: "Ice Giant",
+        dist: "19.22 AU",
+        moons: "28"
+      },
+      "Neptune": {
+        desc: "Dark, cold, and whipped by supersonic winds. The outermost major planet in our system.",
+        type: "Ice Giant",
+        dist: "30.05 AU",
+        moons: "16"
+      },
+      "Pluto": {
+        desc: "A dwarf planet located in the icy Kuiper Belt beyond the orbit of Neptune.",
+        type: "Dwarf Planet",
+        dist: "39.48 AU",
+        moons: "5"
+      }
+    };
+
+    function showPlanetInfo(name) {
+      const info = planetData[name];
+      if (!info) {
+        console.warn(`No planet information is available for "${name}".`);
+        return;
+      }
+
+      document.querySelector('#planet-title').textContent = name;
+      document.querySelector('#planet-desc').textContent = info.desc;
+      document.querySelector('#planet-type').textContent = info.type;
+      document.querySelector('#planet-dist').textContent = info.dist;
+      document.querySelector('#planet-moons').textContent = info.moons;
+      document.querySelector('#planet-card').classList.remove('hidden');
+    }
+
+    function hidePlanetInfo() {
+      document.querySelector('#planet-card').classList.add('hidden');
+    }
+
+    function toggleOrbits() {
+      window.orbitsPaused = !window.orbitsPaused;
+
+      const mixer = document.querySelector('#user-gltf-model').components['animation-mixer'];
+      if (mixer && mixer.mixer) {
+        mixer.mixer.timeScale = window.orbitsPaused ? 0 : mixer.data.timeScale;
+      }
+
+      const icon = document.querySelector('#btn-orbits i');
+      if (icon) {
+        icon.classList.toggle('fa-pause', !window.orbitsPaused);
+        icon.classList.toggle('fa-play', window.orbitsPaused);
+      }
+    }
+
+    function updateScale(value) {
+      const scale = Number(value);
+      if (!Number.isFinite(scale) || scale <= 0) {
+        console.warn('Ignoring invalid solar-system scale:', value);
+        return;
+      }
+
+      document.querySelector('#placed-solar-system').object3D.scale.setScalar(scale);
+    }
+
+    function resetPosition() {
+      const placedSystem = document.querySelector('#placed-solar-system');
+      const scene = document.querySelector('a-scene');
+      const placer = scene.components['ar-hit-test-placer'];
+      const instructionText = document.querySelector('#instruction-text');
+
+      document.querySelector('#scale-slider').value = '0.35';
+      placedSystem.object3D.scale.setScalar(0.35);
+
+      if (scene.is('ar-mode')) {
+        placedSystem.setAttribute('visible', 'false');
+        if (placer) placer.isPlaced = false;
+        if (instructionText) {
+          instructionText.style.opacity = '1';
+          instructionText.innerText = 'Point camera at a flat floor surface to place';
+        }
+        return;
+      }
+
+      placedSystem.object3D.position.set(0, 1.2, -2.5);
+      placedSystem.setAttribute('visible', 'true');
+    }
+
+    function enterARMode() {
+      const scene = document.querySelector('a-scene');
+      const instructionText = document.querySelector('#instruction-text');
+
+      if (!scene || typeof scene.enterVR !== 'function') {
+        console.error('WebXR scene is not ready for AR.');
+        if (instructionText) instructionText.innerText = 'WebXR is not ready. Please reload and try again.';
+        return;
+      }
+
+      if (!navigator.xr) {
+        console.error('WebXR is unavailable. AR requires a supported browser and a secure connection.');
+        if (instructionText) {
+          instructionText.innerText = 'AR requires a WebXR-compatible browser and a secure connection (HTTPS).';
+        }
+        return;
+      }
+
+      try {
+        Promise.resolve(scene.enterVR()).catch((error) => {
+          console.error('Unable to start the AR session:', error);
+          if (instructionText) {
+            instructionText.style.opacity = '1';
+            instructionText.innerText = 'Could not start AR. Check browser support and camera permissions.';
+          }
+        });
+      } catch (error) {
+        console.error('Unable to start the AR session:', error);
+        if (instructionText) {
+          instructionText.style.opacity = '1';
+          instructionText.innerText = 'Could not start AR. Check browser support and camera permissions.';
+        }
+      }
+    }
+
+    /* -------------------------------------------------------------
+       SAFE GLTF MODEL LOADER
+       Prevents Request constructor invalid URL errors in iframe previews
+       ------------------------------------------------------------- */
+    function tryLoadDefaultModel() {
+      const gltfEntity = document.querySelector('#user-gltf-model');
+      const fallbackSystem = document.querySelector('#fallback-solar-system');
+      const instructionText = document.querySelector('#instruction-text');
+
+      // Check if we can safely resolve a valid HTTP/HTTPS URL
+      const relativePath = './Assets/solar_system_animation.glb';
+      let resolvedUrl = null;
+
+      try {
+        if (window.location.protocol.startsWith('http')) {
+          resolvedUrl = new URL(relativePath, window.location.href).href;
+        }
+      } catch (err) {
+        console.warn('Relative URL resolution skipped:', err);
+      }
+
+      if (resolvedUrl && gltfEntity) {
+        // Test request fetch before assigning to A-Frame gltf-model attribute
+        fetch(resolvedUrl, { method: 'HEAD' })
+          .then(response => {
+            if (response.ok) {
+              gltfEntity.addEventListener('model-loaded', () => {
+                gltfEntity.setAttribute('visible', 'true');
+                if (fallbackSystem) fallbackSystem.setAttribute('visible', 'false');
+                if (instructionText) {
+                  instructionText.innerText = "GLTF Model Loaded! Tap planets to inspect.";
+                  setTimeout(() => { instructionText.style.opacity = '0'; }, 3500);
+                }
+              }, { once: true });
+              gltfEntity.addEventListener('model-error', (event) => {
+                console.error('Error loading the default GLTF model:', event.detail || event);
+                showProceduralFallback("Could not load the 3D model. Showing the procedural solar system instead.");
+              }, { once: true });
+              gltfEntity.setAttribute('gltf-model', resolvedUrl);
+            } else {
+              showProceduralFallback("3D Interactive Mode — Click any planet to inspect info");
+            }
+          })
+          .catch(() => {
+            showProceduralFallback("3D Interactive Mode — Click any planet to inspect info");
+          });
+      } else {
+        showProceduralFallback("3D Interactive Mode — Click any planet to inspect info");
+      }
+    }
+
+    function showProceduralFallback(msg) {
+      const fallbackSystem = document.querySelector('#fallback-solar-system');
+      const gltfEntity = document.querySelector('#user-gltf-model');
+      const instructionText = document.querySelector('#instruction-text');
+      if (fallbackSystem) fallbackSystem.setAttribute('visible', 'true');
+      if (gltfEntity) gltfEntity.setAttribute('visible', 'false');
+      if (instructionText && msg) {
+        instructionText.innerText = msg;
+      }
+    }
+
+    /* WEBXR AR SESSION EVENTS */
+    document.addEventListener('DOMContentLoaded', () => {
+      const sceneEl = document.querySelector('a-scene');
+
+      // Attempt safe default model loading
+      tryLoadDefaultModel();
+      
+      sceneEl.addEventListener('enter-vr', () => {
+        if (sceneEl.is('ar-mode')) {
+          document.querySelector('#space-sky').setAttribute('visible', 'false');
+          document.querySelector('#btn-start-ar').classList.add('hidden');
+          document.querySelector('#instruction-text').innerText = "Point camera at a flat floor surface to place";
+        }
+      });
+
+      sceneEl.addEventListener('exit-vr', () => {
+        document.querySelector('#space-sky').setAttribute('visible', 'true');
+        document.querySelector('#btn-start-ar').classList.remove('hidden');
+        document.querySelector('#instruction-text').innerText = "3D Interactive Mode — Click any planet to inspect info";
+      });
+    });
+  </script>
+
+</body>
+</html>
