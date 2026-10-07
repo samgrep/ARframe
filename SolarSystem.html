@@ -14,7 +14,6 @@
       window.__MindARCompiler = window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler;
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
     <style>
       :root {
         color-scheme: dark;
@@ -217,43 +216,128 @@
         box-shadow: 0 0 14px #77e3bd;
       }
 
+      .scanner-bottom {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+
       .planet-card {
-        position: absolute;
-        bottom: max(70px, calc(env(safe-area-inset-bottom) + 62px));
-        left: 50%;
-        width: min(calc(100% - 36px), 440px);
-        max-height: 35vh;
-        overflow-y: auto;
-        padding: 18px 20px;
+        padding: 14px 16px;
         border-radius: 19px;
-        text-align: center;
-        transform: translateX(-50%);
+        max-height: min(38vh, 330px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        pointer-events: auto;
+        text-align: left;
       }
 
-      .planet-card h2 {
-        margin-bottom: 7px;
+      .planet-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .planet-head h2 {
+        margin: 0;
         color: #94dcff;
-        font-size: 1.25rem;
+        font-size: 1.2rem;
+        line-height: 1.15;
       }
 
-      .planet-card p {
-        margin-bottom: 0;
+      .planet-type {
+        display: block;
+        margin-top: 3px;
+        color: #9fb3da;
+        font-size: 0.74rem;
+      }
+
+      .card-toggle {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: 0 13px;
+        border: 1px solid rgba(167, 195, 255, 0.3);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #dce7ff;
+        font-size: 0.74rem;
+        font-weight: 700;
+        box-shadow: none;
+      }
+
+      .planet-body {
+        margin-top: 10px;
+      }
+
+      .planet-card.is-collapsed .planet-body {
+        display: none;
+      }
+
+      #planet-description {
+        margin: 0;
         color: #d1dcf4;
-        font-size: 0.9rem;
+        font-size: 0.86rem;
+        line-height: 1.55;
+      }
+
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin: 12px 0 0;
+      }
+
+      .fact {
+        padding: 8px 10px;
+        border: 1px solid rgba(167, 195, 255, 0.12);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .fact dt {
+        color: #8fa6d3;
+        font-size: 0.64rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .fact dd {
+        margin: 2px 0 0;
+        color: #eaf1ff;
+        font-size: 0.8rem;
+        font-weight: 650;
+        line-height: 1.35;
+      }
+
+      #planet-fun {
+        margin: 12px 0 0;
+        padding-top: 10px;
+        border-top: 1px solid rgba(167, 195, 255, 0.15);
+        color: #b9c8e8;
+        font-size: 0.82rem;
         line-height: 1.5;
       }
 
       .scanner-hint {
-        align-self: center;
-        margin: 0 0 9px;
+        margin: 0;
         color: #e7edff;
-        font-size: 0.8rem;
+        font-size: 0.78rem;
+        text-align: center;
         text-shadow: 0 2px 8px #000;
       }
 
       .a-enter-vr,
       .mindar-ui-overlay {
         display: none !important;
+      }
+
+      @media (max-height: 520px) {
+        .facts {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
       }
 
       @media (max-height: 680px) {
@@ -290,11 +374,23 @@
 
     <div id="scanner-ui" aria-live="polite">
       <div class="scanner-top"><span class="scan-dot"></span><span id="scan-status">Arahkan kamera ke salah satu marker.</span></div>
-      <section id="planet-card" class="planet-card" hidden>
-        <h2 id="planet-name"></h2>
-        <p id="planet-description"></p>
-      </section>
-      <p class="scanner-hint">Jaga marker tetap terlihat di dalam kamera</p>
+      <div class="scanner-bottom">
+        <section id="planet-card" class="planet-card" hidden>
+          <div class="planet-head">
+            <div>
+              <h2 id="planet-name"></h2>
+              <span id="planet-type" class="planet-type"></span>
+            </div>
+            <button id="card-toggle" class="card-toggle" type="button" aria-expanded="true" aria-controls="planet-body">Ringkas</button>
+          </div>
+          <div id="planet-body" class="planet-body">
+            <p id="planet-description"></p>
+            <dl id="planet-facts" class="facts"></dl>
+            <p id="planet-fun"></p>
+          </div>
+        </section>
+        <p class="scanner-hint">Jaga marker tetap terlihat di dalam kamera</p>
+      </div>
     </div>
 
     <div id="target-images" hidden aria-hidden="true">
@@ -333,7 +429,7 @@
       <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0" data-planet="sun">
-        <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0" animation-mixer="clip: *; loop: repeat; timeScale: 1"></a-gltf-model>
+        <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0"></a-gltf-model>
       </a-entity>
       <a-entity mindar-image-target="targetIndex: 1" data-planet="mercury">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mercury; roughness: 1; metalness: 0"></a-sphere>
@@ -367,39 +463,129 @@
         const planets = {
           sun: {
             name: "Matahari",
-            description: "Bintang di pusat tata surya yang menjadi sumber cahaya dan energi bagi planet-planet."
+            type: "Bintang • Kerdil kuning (tipe G)",
+            description: "Matahari adalah bintang di pusat tata surya yang menyumbang sekitar 99,8% dari seluruh massa tata surya. Energinya berasal dari fusi nuklir di inti, yang mengubah hidrogen menjadi helium dan memancarkan cahaya serta panas ke seluruh planet. Gravitasinya menjaga semua planet tetap berada di orbitnya.",
+            facts: [
+              ["Diameter", "≈ 1,39 juta km (±109× Bumi)"],
+              ["Massa", "≈ 333.000× Bumi"],
+              ["Suhu permukaan", "≈ 5.500 °C"],
+              ["Suhu inti", "≈ 15 juta °C"],
+              ["Rotasi", "≈ 25 hari (di ekuator)"],
+              ["Usia", "≈ 4,6 miliar tahun"]
+            ],
+            fun: "Cahaya Matahari membutuhkan sekitar 8 menit 20 detik untuk sampai ke Bumi."
           },
           mercury: {
             name: "Merkurius",
-            description: "Planet terkecil dan terdekat dari Matahari, dengan permukaan berbatu dan kawah."
+            type: "Planet kebumian • Planet terdalam",
+            description: "Merkurius adalah planet terkecil dan terdekat dengan Matahari. Permukaannya berbatu dan dipenuhi kawah seperti Bulan, dengan atmosfer yang sangat tipis sehingga hampir tidak menahan panas. Akibatnya, suhu siang dan malamnya berbeda sangat jauh.",
+            facts: [
+              ["Diameter", "4.879 km"],
+              ["Jarak dari Matahari", "≈ 57,9 juta km (0,39 SA)"],
+              ["Revolusi", "88 hari Bumi"],
+              ["Rotasi", "≈ 59 hari Bumi"],
+              ["Satelit", "0"],
+              ["Suhu", "−180 °C sampai 430 °C"]
+            ],
+            fun: "Satu hari matahari di Merkurius berlangsung sekitar 176 hari Bumi, lebih lama daripada satu tahunnya yang hanya 88 hari."
           },
           venus: {
             name: "Venus",
-            description: "Planet terpanas di tata surya, diselimuti atmosfer tebal yang kaya karbon dioksida."
+            type: "Planet kebumian • Planet terpanas",
+            description: "Venus berukuran hampir sama dengan Bumi, tetapi diselimuti atmosfer tebal yang didominasi karbon dioksida dan awan asam sulfat. Efek rumah kaca yang ekstrem membuat permukaannya lebih panas daripada Merkurius, dengan tekanan udara sekitar 90 kali tekanan di Bumi.",
+            facts: [
+              ["Diameter", "12.104 km"],
+              ["Jarak dari Matahari", "≈ 108 juta km (0,72 SA)"],
+              ["Revolusi", "225 hari Bumi"],
+              ["Rotasi", "≈ 243 hari (berlawanan arah)"],
+              ["Satelit", "0"],
+              ["Suhu permukaan", "≈ 465 °C"]
+            ],
+            fun: "Venus berotasi berlawanan arah dengan kebanyakan planet, sehingga di sana Matahari terbit dari barat."
           },
           earth: {
             name: "Bumi",
-            description: "Rumah bagi kehidupan yang kita kenal, dengan air cair melimpah di permukaannya."
+            type: "Planet kebumian • Satu-satunya yang diketahui berpenghuni",
+            description: "Bumi adalah planet ketiga dari Matahari dan satu-satunya dunia yang diketahui memiliki kehidupan. Sekitar 71% permukaannya tertutup air, dan atmosfer yang kaya nitrogen dan oksigen melindungi makhluk hidup serta menjaga suhu tetap stabil. Medan magnetnya menahan partikel berbahaya dari Matahari.",
+            facts: [
+              ["Diameter", "12.742 km"],
+              ["Jarak dari Matahari", "≈ 149,6 juta km (1 SA)"],
+              ["Revolusi", "≈ 365,25 hari"],
+              ["Rotasi", "23 jam 56 menit"],
+              ["Satelit", "1 (Bulan)"],
+              ["Suhu rata-rata", "≈ 15 °C"]
+            ],
+            fun: "Kemiringan sumbu Bumi sekitar 23,4° adalah penyebab terjadinya pergantian musim."
           },
           mars: {
             name: "Mars",
-            description: "Planet merah dengan gunung berapi Olympus Mons dan jejak aliran air purba."
+            type: "Planet kebumian • Planet merah",
+            description: "Mars tampak merah karena permukaannya kaya besi oksida (karat). Planet ini memiliki Olympus Mons, gunung berapi terbesar yang diketahui di tata surya, serta lembah raksasa Valles Marineris. Lembah sungai purba dan endapan mineral menunjukkan bahwa Mars pernah memiliki air cair.",
+            facts: [
+              ["Diameter", "6.779 km"],
+              ["Jarak dari Matahari", "≈ 227,9 juta km (1,52 SA)"],
+              ["Revolusi", "687 hari Bumi"],
+              ["Rotasi", "24 jam 37 menit"],
+              ["Satelit", "2 (Phobos & Deimos)"],
+              ["Suhu rata-rata", "≈ −63 °C"]
+            ],
+            fun: "Olympus Mons setinggi sekitar 22 km, kira-kira 2,5 kali tinggi Gunung Everest."
           },
           jupiter: {
             name: "Jupiter",
-            description: "Planet terbesar di tata surya, raksasa gas dengan badai besar bernama Bintik Merah Besar."
+            type: "Raksasa gas • Planet terbesar",
+            description: "Jupiter adalah planet terbesar, dengan massa lebih dari dua kali massa semua planet lain digabungkan. Atmosfernya didominasi hidrogen dan helium, dengan pita awan berwarna serta badai raksasa Bintik Merah Besar yang telah diamati selama berabad-abad. Satelitnya, Ganymede, adalah satelit terbesar di tata surya.",
+            facts: [
+              ["Diameter", "≈ 139.820 km"],
+              ["Jarak dari Matahari", "≈ 778 juta km (5,2 SA)"],
+              ["Revolusi", "≈ 11,9 tahun"],
+              ["Rotasi", "≈ 9 jam 56 menit"],
+              ["Satelit", "90+"],
+              ["Suhu awan", "≈ −110 °C"]
+            ],
+            fun: "Walau paling besar, Jupiter berotasi paling cepat di antara semua planet, sehingga satu harinya hanya sekitar 10 jam."
           },
           saturn: {
             name: "Saturnus",
-            description: "Raksasa gas yang terkenal dengan sistem cincin luas yang tersusun terutama dari es dan batu."
+            type: "Raksasa gas • Planet bercincin",
+            description: "Saturnus terkenal dengan sistem cincinnya yang luas, tersusun dari kepingan es dan batu berukuran dari butiran debu hingga bongkahan sebesar rumah. Planet ini sebagian besar terdiri dari hidrogen dan helium, dengan kerapatan rata-rata lebih rendah daripada air. Satelit terbesarnya, Titan, memiliki atmosfer tebal dan danau metana cair.",
+            facts: [
+              ["Diameter", "≈ 116.460 km"],
+              ["Jarak dari Matahari", "≈ 1,43 miliar km (9,6 SA)"],
+              ["Revolusi", "≈ 29,5 tahun"],
+              ["Rotasi", "≈ 10 jam 33 menit"],
+              ["Satelit", "140+"],
+              ["Suhu awan", "≈ −140 °C"]
+            ],
+            fun: "Karena kerapatannya rendah, Saturnus secara teori akan mengapung jika ada bak air yang cukup besar."
           },
           uranus: {
             name: "Uranus",
-            description: "Raksasa es berwarna biru kehijauan yang berotasi dengan sumbu sangat miring."
+            type: "Raksasa es • Planet yang berguling",
+            description: "Uranus berwarna biru kehijauan karena metana di atmosfernya menyerap cahaya merah. Sumbu rotasinya miring sekitar 98°, sehingga planet ini seolah berputar sambil berguling mengelilingi Matahari. Uranus memiliki 13 cincin yang redup dan puluhan satelit, banyak di antaranya dinamai dari tokoh karya Shakespeare.",
+            facts: [
+              ["Diameter", "≈ 50.724 km"],
+              ["Jarak dari Matahari", "≈ 2,87 miliar km (19,2 SA)"],
+              ["Revolusi", "≈ 84 tahun"],
+              ["Rotasi", "≈ 17 jam 14 menit (berlawanan arah)"],
+              ["Satelit", "28+"],
+              ["Suhu", "≈ −195 °C"]
+            ],
+            fun: "Satu musim di Uranus berlangsung sekitar 21 tahun Bumi, dengan kutub yang bergantian mengalami siang dan malam panjang."
           },
           neptune: {
             name: "Neptunus",
-            description: "Planet terjauh dari Matahari, raksasa es dengan atmosfer biru dan angin yang sangat kencang."
+            type: "Raksasa es • Planet terjauh",
+            description: "Neptunus adalah planet terjauh dari Matahari dan ditemukan pada tahun 1846 lewat perhitungan matematika sebelum diamati langsung. Atmosfernya berwarna biru pekat dan memiliki angin tercepat di tata surya, dengan kecepatan hingga sekitar 2.000 km/jam. Satelit terbesarnya, Triton, mengorbit berlawanan arah dengan rotasi planet.",
+            facts: [
+              ["Diameter", "≈ 49.244 km"],
+              ["Jarak dari Matahari", "≈ 4,5 miliar km (30,1 SA)"],
+              ["Revolusi", "≈ 164,8 tahun"],
+              ["Rotasi", "≈ 16 jam 6 menit"],
+              ["Satelit", "16"],
+              ["Suhu", "≈ −200 °C"]
+            ],
+            fun: "Neptunus baru menyelesaikan satu putaran penuh mengelilingi Matahari sejak penemuannya pada tahun 2011."
           }
         };
         const markerIds = [
@@ -421,6 +607,12 @@
         const scannerUi = document.getElementById("scanner-ui");
         const scanStatus = document.getElementById("scan-status");
         const planetCard = document.getElementById("planet-card");
+        const planetName = document.getElementById("planet-name");
+        const planetType = document.getElementById("planet-type");
+        const planetDescription = document.getElementById("planet-description");
+        const planetFacts = document.getElementById("planet-facts");
+        const planetFun = document.getElementById("planet-fun");
+        const cardToggle = document.getElementById("card-toggle");
         const scene = document.getElementById("ar-scene");
         const activeTargets = new Set();
         let targetUrl = null;
@@ -428,11 +620,30 @@
         function showPlanet(key) {
           const planet = planets[key];
           if (!planet) return;
-          document.getElementById("planet-name").textContent = planet.name;
-          document.getElementById("planet-description").textContent = planet.description;
+          planetName.textContent = planet.name;
+          planetType.textContent = planet.type;
+          planetDescription.textContent = planet.description;
+          planetFun.textContent = `Tahukah kamu? ${planet.fun}`;
+          planetFacts.replaceChildren(...planet.facts.map(([label, value]) => {
+            const item = document.createElement("div");
+            item.className = "fact";
+            const term = document.createElement("dt");
+            term.textContent = label;
+            const detail = document.createElement("dd");
+            detail.textContent = value;
+            item.append(term, detail);
+            return item;
+          }));
           planetCard.hidden = false;
+          planetCard.scrollTop = 0;
           scanStatus.textContent = `Marker ${planet.name} terdeteksi`;
         }
+
+        cardToggle.addEventListener("click", () => {
+          const collapsed = planetCard.classList.toggle("is-collapsed");
+          cardToggle.textContent = collapsed ? "Detail" : "Ringkas";
+          cardToggle.setAttribute("aria-expanded", String(!collapsed));
+        });
 
         // Pastikan gambar benar-benar berhasil dimuat (termasuk yang sudah gagal sebelum script ini jalan)
         function waitForImage(image) {
