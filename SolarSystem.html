@@ -407,7 +407,7 @@
 
     <a-scene
       id="ar-scene"
-      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
+      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 12; missTolerance: 6;"
       renderer="alpha: true; antialias: true"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
@@ -614,7 +614,9 @@
         const planetFun = document.getElementById("planet-fun");
         const cardToggle = document.getElementById("card-toggle");
         const scene = document.getElementById("ar-scene");
-        const activeTargets = new Set();
+        const CONFIRM_MS = 450; // marker harus terdeteksi stabil selama ini sebelum konten tampil
+        const confirmedTargets = new Set();
+        const confirmTimers = new Map();
         let targetUrl = null;
 
         function showPlanet(key) {
@@ -800,21 +802,42 @@
           }
         });
 
+        // Konten 3D disembunyikan sampai marker terbukti stabil,
+        // sehingga deteksi palsu sesaat tidak menampilkan planet yang salah.
+        function setContentVisible(target, visible) {
+          Array.from(target.children).forEach((child) => child.setAttribute("visible", visible));
+        }
+
+        function refreshCard() {
+          const latest = Array.from(confirmedTargets).pop();
+          if (latest) {
+            showPlanet(latest);
+          } else {
+            planetCard.hidden = true;
+            scanStatus.textContent = "Marker tidak terlihat. Arahkan kamera ke marker planet.";
+          }
+        }
+
         document.querySelectorAll("[mindar-image-target]").forEach((target) => {
+          const key = target.dataset.planet;
+          setContentVisible(target, false);
+
           target.addEventListener("targetFound", () => {
-            const key = target.dataset.planet;
-            activeTargets.add(key);
-            showPlanet(key);
+            window.clearTimeout(confirmTimers.get(key));
+            confirmTimers.set(key, window.setTimeout(() => {
+              confirmTimers.delete(key);
+              confirmedTargets.add(key);
+              setContentVisible(target, true);
+              refreshCard();
+            }, CONFIRM_MS));
           });
+
           target.addEventListener("targetLost", () => {
-            activeTargets.delete(target.dataset.planet);
-            const nextTarget = Array.from(activeTargets).pop();
-            if (nextTarget) {
-              showPlanet(nextTarget);
-            } else {
-              planetCard.hidden = true;
-              scanStatus.textContent = "Marker tidak terlihat. Arahkan kamera ke marker planet.";
-            }
+            window.clearTimeout(confirmTimers.get(key));
+            confirmTimers.delete(key);
+            confirmedTargets.delete(key);
+            setContentVisible(target, false);
+            refreshCard();
           });
         });
 
