@@ -14,6 +14,7 @@
       window.__MindARCompiler = window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler;
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
     <style>
       :root {
         color-scheme: dark;
@@ -217,10 +218,16 @@
       }
 
       .planet-card {
-        align-self: center;
+        position: absolute;
+        bottom: max(70px, calc(env(safe-area-inset-bottom) + 62px));
+        left: 50%;
+        width: min(calc(100% - 36px), 440px);
+        max-height: 35vh;
+        overflow-y: auto;
         padding: 18px 20px;
         border-radius: 19px;
         text-align: center;
+        transform: translateX(-50%);
       }
 
       .planet-card h2 {
@@ -326,7 +333,7 @@
       <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0" data-planet="sun">
-        <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0"></a-gltf-model>
+        <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0" animation-mixer="clip: *; loop: repeat; timeScale: 1"></a-gltf-model>
       </a-entity>
       <a-entity mindar-image-target="targetIndex: 1" data-planet="mercury">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mercury; roughness: 1; metalness: 0"></a-sphere>
