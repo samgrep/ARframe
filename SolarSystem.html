@@ -1,746 +1,512 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>AR Solar System Explorer</title>
-
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- A-Frame 1.4.2 -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js" crossorigin="anonymous"></script>
-
-  <!-- A-Frame Extras for GLTF animation-mixer -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js" crossorigin="anonymous"></script>
-  
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-  <style>
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      user-select: none;
-      -webkit-user-select: none;
-      overflow: hidden;
-      background-color: #020617;
-    }
-
-    /* Glassmorphism Effect */
-    .glass-panel {
-      background: rgba(15, 23, 42, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-    }
-
-    /* Hide default A-Frame VR/AR button */
-    .a-enter-vr, .a-enter-ar {
-      display: none !important;
-    }
-
-    /* Background video for WebRTC AR camera pass-through fallback */
-    #camera-feed {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      z-index: 0;
-    }
-
-    a-scene {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: 1;
-    }
-
-    /* Reticle Pulsing Animation for AR Surface Detection */
-    @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 0.4; }
-      100% { transform: scale(0.95); opacity: 0.8; }
-    }
-    
-    .reticle-pulse {
-      animation: pulse-ring 2s infinite ease-in-out;
-    }
-
-    .bg-grid {
-      background-image: radial-gradient(rgba(56, 189, 248, 0.15) 1px, transparent 1px);
-      background-size: 24px 24px;
-    }
-
-    ::-webkit-scrollbar {
-      width: 4px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(56, 189, 248, 0.3);
-      border-radius: 4px;
-    }
-  </style>
-
-  <script>
-    window.orbitsPaused = false;
-
-    /* Orbit revolution component */
-    AFRAME.registerComponent('orbit-anim', {
-      schema: {
-        speed: { type: 'number', default: 1 }
-      },
-      tick: function (time, timeDelta) {
-        if (window.orbitsPaused) return;
-        const deltaSeconds = (timeDelta || 16) / 1000;
-        const speedMultiplier = this.data.speed * 0.15;
-        this.el.object3D.rotation.y += speedMultiplier * deltaSeconds;
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#050816">
+    <title>Solar System WebAR</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #050816;
+        color: #f4f7ff;
       }
-    });
 
-    /* Planet Inspector Component */
-    AFRAME.registerComponent('planet-inspector', {
-      init: function () {
-        this.el.addEventListener('click', (event) => {
-          const intersection = event.detail && event.detail.intersection;
-          let detectedName = intersection
-            ? getPlanetNameFromIntersection(intersection)
-            : "Unknown";
-
-          if (detectedName === "Unknown" && !intersection && this.el.hasAttribute('data-name')) {
-            detectedName = this.el.getAttribute('data-name');
-          }
-
-          if (detectedName !== "Unknown" && window.showPlanetInfo) {
-            window.showPlanetInfo(detectedName);
-          }
-        });
+      * {
+        box-sizing: border-box;
       }
-    });
 
-    function getPlanetNameFromIntersection(intersection) {
-      return intersection && getPlanetNameFromObject(intersection.object);
-    }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
 
-    function getPlanetNameFromObject(object) {
-      const planetNames = [
-        { match: 'sun', name: 'Matahari' },
-        { match: 'matahari', name: 'Matahari' },
-        { match: 'mercury', name: 'Merkurius' },
-        { match: 'merkurius', name: 'Merkurius' },
-        { match: 'venus', name: 'Venus' },
-        { match: 'earth', name: 'Bumi' },
-        { match: 'erath', name: 'Bumi' },
-        { match: 'bumi', name: 'Bumi' },
-        { match: 'moon', name: 'Bulan' },
-        { match: 'bulan', name: 'Bulan' },
-        { match: 'mars', name: 'Mars' },
-        { match: 'jupiter', name: 'Jupiter' },
-        { match: 'saturn', name: 'Saturnus' },
-        { match: 'saturnus', name: 'Saturnus' },
-        { match: 'uranus', name: 'Uranus' },
-        { match: 'neptune', name: 'Neptunus' },
-        { match: 'neptunus', name: 'Neptunus' },
-        { match: 'pluto', name: 'Pluto' }
-      ];
+      body {
+        background:
+          radial-gradient(ellipse at 50% 110%, rgba(62, 68, 160, 0.3), transparent 48%),
+          radial-gradient(ellipse at 12% 12%, rgba(26, 76, 125, 0.2), transparent 36%),
+          #050816;
+      }
 
-      while (object) {
-        const materialNames = (Array.isArray(object.material) ? object.material : [object.material])
-          .filter(Boolean)
-          .map((material) => material.name || '');
-        const names = [object.name, ...materialNames].filter(Boolean);
+      #ar-scene {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+      }
 
-        for (const rawName of names) {
-          const name = rawName.toLowerCase();
-          const planet = planetNames.find((entry) => name.includes(entry.match));
-          if (planet) return planet.name;
+      .screen {
+        position: fixed;
+        inset: 0;
+        z-index: 5;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: linear-gradient(180deg, rgba(4, 8, 22, 0.58), rgba(4, 8, 22, 0.82));
+        transition: opacity 250ms ease, visibility 250ms ease;
+      }
+
+      .screen.is-hidden {
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .welcome-card {
+        width: min(100%, 520px);
+        padding: clamp(26px, 6vw, 46px);
+        border: 1px solid rgba(159, 190, 255, 0.2);
+        border-radius: 26px;
+        background: linear-gradient(145deg, rgba(16, 27, 56, 0.94), rgba(9, 14, 34, 0.94));
+        box-shadow: 0 24px 90px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        text-align: center;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: #83d6ff;
+        font-size: 0.72rem;
+        font-weight: 750;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 12px;
+        font-size: clamp(2rem, 8vw, 3.4rem);
+        line-height: 1;
+        letter-spacing: -0.055em;
+      }
+
+      .intro {
+        max-width: 390px;
+        margin: 0 auto 24px;
+        color: #bbc7e4;
+        line-height: 1.65;
+      }
+
+      .marker-list {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin: 0 auto 25px;
+      }
+
+      .marker-list span {
+        padding: 7px 11px;
+        border: 1px solid rgba(151, 177, 232, 0.19);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.045);
+        color: #dce7ff;
+        font-size: 0.78rem;
+      }
+
+      button {
+        min-height: 50px;
+        padding: 0 26px;
+        border: 0;
+        border-radius: 14px;
+        background: linear-gradient(110deg, #68d5ff, #a98aff);
+        color: #091326;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 8px 28px rgba(94, 177, 255, 0.25);
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.58;
+      }
+
+      #setup-status,
+      #error-message {
+        min-height: 1.4em;
+        margin: 14px 0 0;
+        color: #aebcda;
+        font-size: 0.83rem;
+        line-height: 1.5;
+      }
+
+      #error-message {
+        color: #ffb4b4;
+      }
+
+      .progress-track {
+        width: 100%;
+        height: 4px;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      #progress-bar {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: #83d6ff;
+        transition: width 160ms ease;
+      }
+
+      #scanner-ui {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        display: none;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: max(18px, env(safe-area-inset-top)) 18px max(22px, env(safe-area-inset-bottom));
+        pointer-events: none;
+      }
+
+      #scanner-ui.is-visible {
+        display: flex;
+      }
+
+      .scanner-top,
+      .planet-card {
+        width: min(100%, 440px);
+        margin-inline: auto;
+        border: 1px solid rgba(167, 195, 255, 0.2);
+        background: rgba(7, 13, 31, 0.78);
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(16px);
+      }
+
+      .scanner-top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 16px;
+        color: #d9e5ff;
+        font-size: 0.88rem;
+      }
+
+      .scan-dot {
+        width: 10px;
+        height: 10px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #77e3bd;
+        box-shadow: 0 0 14px #77e3bd;
+      }
+
+      .planet-card {
+        align-self: center;
+        padding: 18px 20px;
+        border-radius: 19px;
+        text-align: center;
+      }
+
+      .planet-card h2 {
+        margin-bottom: 7px;
+        color: #94dcff;
+        font-size: 1.25rem;
+      }
+
+      .planet-card p {
+        margin-bottom: 0;
+        color: #d1dcf4;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
+      .scanner-hint {
+        align-self: center;
+        margin: 0 0 9px;
+        color: #e7edff;
+        font-size: 0.8rem;
+        text-shadow: 0 2px 8px #000;
+      }
+
+      .a-enter-vr,
+      .mindar-ui-overlay {
+        display: none !important;
+      }
+
+      @media (max-height: 680px) {
+        .welcome-card {
+          padding-block: 23px;
         }
 
-        const entityName = object.el && object.el.getAttribute('data-name');
-        if (entityName && !entityName.includes('&')) {
-          const planet = planetNames.find((entry) => entityName.toLowerCase().includes(entry.match));
-          if (planet) return planet.name;
+        .intro {
+          margin-bottom: 15px;
         }
 
-        object = object.parent;
+        .marker-list {
+          margin-bottom: 16px;
+        }
       }
+    </style>
+  </head>
+  <body>
+    <main id="welcome-screen" class="screen">
+      <section class="welcome-card" aria-labelledby="page-title">
+        <p class="eyebrow">Pengalaman Augmented Reality</p>
+        <h1 id="page-title">Solar System</h1>
+        <p class="intro">Jelajahi tata surya dengan memindai salah satu marker planet. Izinkan akses kamera saat AR dimulai.</p>
+        <div class="marker-list" aria-label="Marker yang didukung">
+          <span>Matahari</span><span>Merkurius</span><span>Venus</span><span>Bumi</span><span>Mars</span>
+          <span>Jupiter</span><span>Saturnus</span><span>Uranus</span><span>Neptunus</span>
+        </div>
+        <button id="start-button" type="button" disabled>Menyiapkan marker...</button>
+        <p id="setup-status" role="status">Memuat gambar marker...</p>
+        <div class="progress-track" aria-hidden="true"><div id="progress-bar"></div></div>
+        <p id="error-message" role="alert"></p>
+      </section>
+    </main>
 
-      return "Unknown";
-    }
+    <div id="scanner-ui" aria-live="polite">
+      <div class="scanner-top"><span class="scan-dot"></span><span id="scan-status">Arahkan kamera ke salah satu marker.</span></div>
+      <section id="planet-card" class="planet-card" hidden>
+        <h2 id="planet-name"></h2>
+        <p id="planet-description"></p>
+      </section>
+      <p class="scanner-hint">Jaga marker tetap terlihat di dalam kamera</p>
+    </div>
 
-    AFRAME.registerComponent('planet-screen-picker', {
-      init: function () {
-        this.canvas = null;
-        this.onCanvasClick = this.onCanvasClick.bind(this);
-        this.bindCanvas = this.bindCanvas.bind(this);
-        this.el.addEventListener('render-target-loaded', this.bindCanvas);
-        this.bindCanvas();
-      },
+    <div id="target-images" hidden aria-hidden="true">
+      <img id="target-sun" src="./Markers/Sun.png" alt="">
+      <img id="target-mercury" src="./Markers/Mercury.png" alt="">
+      <img id="target-venus" src="./Markers/Venus.png" alt="">
+      <img id="target-earth" src="./Markers/Earth.png" alt="">
+      <img id="target-mars" src="./Markers/Mars.png" alt="">
+      <img id="target-jupiter" src="./Markers/Jupiter.png" alt="">
+      <img id="target-saturn" src="./Markers/Saturn.png" alt="">
+      <img id="target-uranus" src="./Markers/Uranus.png" alt="">
+      <img id="target-neptune" src="./Markers/Neptune.png" alt="">
+    </div>
 
-      bindCanvas: function () {
-        const canvas = this.el.canvas;
-        if (!canvas || canvas === this.canvas) return;
+    <a-scene
+      id="ar-scene"
+      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
+      color-space="sRGB"
+      renderer="colorManagement: true; physicallyCorrectLights: true"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false">
+      <a-assets timeout="30000">
+        <a-asset-item id="solar-system-model" src="./Assets/solar_system_animation.glb"></a-asset-item>
+        <img id="texture-mercury" src="./Assets/textures/mercury_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-venus" src="./Assets/textures/venus_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-earth" src="./Assets/textures/earth_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-mars" src="./Assets/textures/mars_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-jupiter" src="./Assets/textures/jupiter_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-saturn" src="./Assets/textures/saturn_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-saturn-ring" src="./Assets/textures/saturn_ring_baseColor.png" crossorigin="anonymous">
+        <img id="texture-uranus" src="./Assets/textures/uranus_baseColor.jpeg" crossorigin="anonymous">
+        <img id="texture-neptune" src="./Assets/textures/neptune_baseColor.jpeg" crossorigin="anonymous">
+      </a-assets>
 
-        if (this.canvas) this.canvas.removeEventListener('click', this.onCanvasClick);
-        this.canvas = canvas;
-        this.canvas.addEventListener('click', this.onCanvasClick);
-      },
+      <a-light type="ambient" color="#ffffff" intensity="1"></a-light>
+      <a-light type="directional" color="#ffffff" intensity="1.2" position="-1 2 3"></a-light>
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      onCanvasClick: function (event) {
-        if (!this.canvas || !this.el.camera) return;
+      <a-entity mindar-image-target="targetIndex: 0" data-planet="sun">
+        <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0"></a-gltf-model>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 1" data-planet="mercury">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mercury; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 2" data-planet="venus">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-venus; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 3" data-planet="earth">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-earth; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 4" data-planet="mars">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mars; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 5" data-planet="jupiter">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-jupiter; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 6" data-planet="saturn">
+        <a-sphere radius="0.21" position="0 0 0.2" material="src: #texture-saturn; roughness: 1; metalness: 0"></a-sphere>
+        <a-torus radius="0.32" radius-tubular="0.035" rotation="24 0 0" position="0 0 0.2" material="src: #texture-saturn-ring; roughness: 1; metalness: 0"></a-torus>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 7" data-planet="uranus">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-uranus; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 8" data-planet="neptune">
+        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-neptune; roughness: 1; metalness: 0"></a-sphere>
+      </a-entity>
+    </a-scene>
 
-        const bounds = this.canvas.getBoundingClientRect();
-        if (!bounds.width || !bounds.height) return;
+    <script>
+      (() => {
+        const planets = {
+          sun: {
+            name: "Matahari",
+            description: "Bintang di pusat tata surya yang menjadi sumber cahaya dan energi bagi planet-planet."
+          },
+          mercury: {
+            name: "Merkurius",
+            description: "Planet terkecil dan terdekat dari Matahari, dengan permukaan berbatu dan kawah."
+          },
+          venus: {
+            name: "Venus",
+            description: "Planet terpanas di tata surya, diselimuti atmosfer tebal yang kaya karbon dioksida."
+          },
+          earth: {
+            name: "Bumi",
+            description: "Rumah bagi kehidupan yang kita kenal, dengan air cair melimpah di permukaannya."
+          },
+          mars: {
+            name: "Mars",
+            description: "Planet merah dengan gunung berapi Olympus Mons dan jejak aliran air purba."
+          },
+          jupiter: {
+            name: "Jupiter",
+            description: "Planet terbesar di tata surya, raksasa gas dengan badai besar bernama Bintik Merah Besar."
+          },
+          saturn: {
+            name: "Saturnus",
+            description: "Raksasa gas yang terkenal dengan sistem cincin luas yang tersusun terutama dari es dan batu."
+          },
+          uranus: {
+            name: "Uranus",
+            description: "Raksasa es berwarna biru kehijauan yang berotasi dengan sumbu sangat miring."
+          },
+          neptune: {
+            name: "Neptunus",
+            description: "Planet terjauh dari Matahari, raksasa es dengan atmosfer biru dan angin yang sangat kencang."
+          }
+        };
+        const markerIds = [
+          "target-sun",
+          "target-mercury",
+          "target-venus",
+          "target-earth",
+          "target-mars",
+          "target-jupiter",
+          "target-saturn",
+          "target-uranus",
+          "target-neptune"
+        ];
+        const welcomeScreen = document.getElementById("welcome-screen");
+        const startButton = document.getElementById("start-button");
+        const setupStatus = document.getElementById("setup-status");
+        const errorMessage = document.getElementById("error-message");
+        const progressBar = document.getElementById("progress-bar");
+        const scannerUi = document.getElementById("scanner-ui");
+        const scanStatus = document.getElementById("scan-status");
+        const planetCard = document.getElementById("planet-card");
+        const scene = document.getElementById("ar-scene");
+        const activeTargets = new Set();
 
-        const pointer = new THREE.Vector2(
-          ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
-          -((event.clientY - bounds.top) / bounds.height) * 2 + 1
-        );
-        const camera = this.el.camera;
-        camera.updateMatrixWorld(true);
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(pointer, camera);
+        function showPlanet(key) {
+          const planet = planets[key];
+          if (!planet) return;
+          document.getElementById("planet-name").textContent = planet.name;
+          document.getElementById("planet-description").textContent = planet.description;
+          planetCard.hidden = false;
+          scanStatus.textContent = `Marker ${planet.name} terdeteksi`;
+        }
 
-        const modelEntity = document.getElementById('gltf-model-node');
-        const fallbackEntity = document.getElementById('solar-system-fallback');
-        const modelRoot = modelEntity && modelEntity.getAttribute('visible') !== false
-          ? modelEntity.getObject3D('mesh')
-          : null;
-        const activeRoot = modelRoot || (fallbackEntity && fallbackEntity.getAttribute('visible') !== false
-          ? fallbackEntity.object3D
-          : null);
-        if (!activeRoot) return;
+        async function prepareTargets() {
+          try {
+            if (!window.MINDAR || !window.MINDAR.IMAGE || !window.MINDAR.IMAGE.Compiler) {
+              throw new Error("Library AR tidak berhasil dimuat. Periksa koneksi internet lalu muat ulang halaman.");
+            }
 
-        const intersections = raycaster.intersectObject(activeRoot, true);
-        for (const intersection of intersections) {
-          const planetName = getPlanetNameFromIntersection(intersection);
-          if (planetName && planetName !== 'Unknown') {
-            window.showPlanetInfo(planetName);
+            const images = markerIds.map((id) => document.getElementById(id));
+            await Promise.all(images.map((image) => {
+              if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+              return new Promise((resolve, reject) => {
+                image.addEventListener("load", resolve, { once: true });
+                image.addEventListener("error", () => reject(new Error(`Gambar marker ${image.id} gagal dimuat.`)), { once: true });
+              });
+            }));
+
+            setupStatus.textContent = "Menganalisis 9 gambar marker...";
+            const compiler = new MINDAR.IMAGE.Compiler();
+            await compiler.compileImageTargets(images, (progress) => {
+              const percent = Math.max(0, Math.min(100, Math.round(progress)));
+              progressBar.style.width = `${percent}%`;
+              setupStatus.textContent = `Menyiapkan marker... ${percent}%`;
+            });
+            const targetData = await compiler.exportData();
+            const targetUrl = URL.createObjectURL(new Blob([targetData], { type: "application/octet-stream" }));
+            scene.setAttribute("mindar-image", {
+              imageTargetSrc: targetUrl,
+              autoStart: false,
+              uiLoading: "no",
+              uiScanning: "no",
+              uiError: "no"
+            });
+
+            startButton.disabled = false;
+            startButton.textContent = "Mulai AR";
+            setupStatus.textContent = "Marker siap. Tekan Mulai AR untuk membuka kamera.";
+            progressBar.style.width = "100%";
+          } catch (error) {
+            setupStatus.textContent = "Persiapan AR tidak berhasil.";
+            errorMessage.textContent = error.message || "Terjadi kesalahan saat menyiapkan marker.";
+            startButton.disabled = true;
+          }
+        }
+
+        startButton.addEventListener("click", async () => {
+          errorMessage.textContent = "";
+          startButton.disabled = true;
+          startButton.textContent = "Memulai kamera...";
+
+          if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            errorMessage.textContent = "Kamera memerlukan halaman HTTPS atau localhost. Buka halaman ini melalui server lokal atau hosting HTTPS.";
+            startButton.disabled = false;
+            startButton.textContent = "Coba Mulai AR";
             return;
           }
-        }
 
-        const scale = camera.getWorldScale(new THREE.Vector3());
-        const worldUnitsPerPixel = (2 * Math.max(0.01, -raycaster.ray.origin.distanceTo(activeRoot.getWorldPosition(new THREE.Vector3()))) *
-          Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / bounds.height;
-        const pickTolerance = worldUnitsPerPixel * 12 * Math.max(Math.abs(scale.x), Math.abs(scale.y), Math.abs(scale.z));
-        let nearestPlanet = null;
-        let nearestDistance = Infinity;
-
-        activeRoot.traverse((object) => {
-          if (!object.isMesh || !object.geometry) return;
-          const planetName = getPlanetNameFromObject(object);
-          if (!planetName || planetName === 'Unknown') return;
-
-          if (!object.geometry.boundingSphere) object.geometry.computeBoundingSphere();
-          if (!object.geometry.boundingSphere) return;
-
-          const center = object.geometry.boundingSphere.center.clone();
-          object.localToWorld(center);
-          const distanceAlongRay = raycaster.ray.origin.distanceTo(center);
-          const distanceFromRay = raycaster.ray.distanceToPoint(center);
-          const worldScale = object.getWorldScale(new THREE.Vector3());
-          const meshRadius = object.geometry.boundingSphere.radius *
-            Math.max(Math.abs(worldScale.x), Math.abs(worldScale.y), Math.abs(worldScale.z));
-
-          if (distanceFromRay <= Math.max(meshRadius, pickTolerance) && distanceAlongRay < nearestDistance) {
-            nearestPlanet = planetName;
-            nearestDistance = distanceAlongRay;
+          try {
+            const arSystem = scene.systems["mindar-image-system"];
+            if (!arSystem) throw new Error("Sistem AR belum siap. Muat ulang halaman dan coba lagi.");
+            await arSystem.start();
+            welcomeScreen.classList.add("is-hidden");
+            scannerUi.classList.add("is-visible");
+            scanStatus.textContent = "Arahkan kamera ke salah satu marker.";
+          } catch (error) {
+            startButton.disabled = false;
+            startButton.textContent = "Coba Mulai AR";
+            errorMessage.textContent = error.name === "NotAllowedError"
+              ? "Izin kamera ditolak. Izinkan akses kamera di pengaturan browser, lalu coba lagi."
+              : (error.message || "Kamera tidak dapat dimulai. Pastikan tidak sedang digunakan aplikasi lain.");
           }
         });
 
-        if (nearestPlanet) window.showPlanetInfo(nearestPlanet);
-      },
-
-      remove: function () {
-        if (this.canvas) this.canvas.removeEventListener('click', this.onCanvasClick);
-        this.el.removeEventListener('render-target-loaded', this.bindCanvas);
-      }
-    });
-
-    function setSolarSystemRaycastTargets(useGlb) {
-      const gltfEntity = document.getElementById('gltf-model-node');
-      const fallbackEntity = document.getElementById('solar-system-fallback');
-
-      if (gltfEntity) gltfEntity.classList.toggle('clickable', useGlb);
-      if (fallbackEntity) {
-        fallbackEntity.querySelectorAll('.clickable').forEach((planet) => {
-          planet.classList.toggle('clickable', !useGlb);
-        });
-      }
-
-      const camera = document.getElementById('main-camera');
-      const raycaster = camera && camera.components.raycaster;
-      if (raycaster) raycaster.refreshObjects();
-    }
-
-    AFRAME.registerComponent('solar-model-status', {
-      init: function () {
-        this.el.addEventListener('model-loaded', () => {
-          const model = this.el.getObject3D('mesh');
-          const fallback = document.getElementById('solar-system-fallback');
-
-          if (!model) {
-            console.error('GLB model loaded without a renderable mesh.');
-            if (fallback) fallback.setAttribute('visible', 'true');
-            return;
-          }
-
-          this.el.object3D.scale.set(1, 1, 1);
-          this.el.object3D.updateMatrixWorld(true);
-          model.updateMatrixWorld(true);
-
-          const bounds = new THREE.Box3().setFromObject(model);
-          const size = bounds.getSize(new THREE.Vector3());
-          const largestDimension = Math.max(size.x, size.y, size.z);
-          if (largestDimension > 0 && Number.isFinite(largestDimension)) {
-            this.el.object3D.scale.setScalar(4.2 / largestDimension);
-            this.el.object3D.updateMatrixWorld(true);
-          }
-
-          this.el.setAttribute('visible', 'true');
-          if (fallback) fallback.setAttribute('visible', 'false');
-          setSolarSystemRaycastTargets(true);
-        });
-
-        this.el.addEventListener('model-error', (event) => {
-          console.error('Failed to load the solar system GLB:', event.detail || event);
-          this.el.setAttribute('visible', 'false');
-          const fallback = document.getElementById('solar-system-fallback');
-          if (fallback) fallback.setAttribute('visible', 'true');
-          setSolarSystemRaycastTargets(false);
-          const instructionText = document.getElementById('instruction-text');
-          if (instructionText) {
-            instructionText.innerText = 'Model 3D gagal dimuat. Menampilkan Tata Surya alternatif.';
-          }
-        });
-      }
-    });
-  </script>
-</head>
-
-<body class="bg-slate-950 text-white overflow-hidden">
-
-  <!-- CAMERA FEED FOR AR PASSTHROUGH -->
-  <video id="camera-feed" autoplay playsinline muted class="hidden"></video>
-
-  <!-- =========================================================
-       1. START MENU OVERLAY
-       ========================================================= -->
-  <div id="start-menu" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 bg-grid p-4 transition-opacity duration-500 overflow-y-auto">
-    <div class="absolute inset-0 bg-gradient-to-b from-cyan-950/50 via-slate-950/90 to-slate-950"></div>
-
-    <div class="relative glass-panel p-6 sm:p-10 rounded-3xl max-w-lg w-full text-center shadow-2xl border border-cyan-500/30 flex flex-col items-center my-auto z-10">
-      
-      <!-- Pulsing Logo -->
-      <div class="w-20 h-20 mb-5 rounded-full bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-center text-cyan-400 shadow-[0_0_35px_rgba(34,211,238,0.3)] relative">
-        <i class="fa-solid fa-solar-system text-3xl animate-spin" style="animation-duration: 18s;"></i>
-        <div class="absolute inset-0 rounded-full border border-cyan-400/40 animate-ping opacity-25"></div>
-      </div>
-
-      <h1 class="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 tracking-tight mb-2">
-        AR Solar System Explorer
-      </h1>
-      <p class="text-xs sm:text-sm text-slate-300 mb-6 leading-relaxed max-w-md">
-        Jelajahi Tata Surya 3D interaktif langsung di sekitar Anda. Izinkan akses kamera untuk memulai mode Augmented Reality (AR) dan berjalan mengelilingi model.
-      </p>
-
-      <!-- Badges -->
-      <div class="grid grid-cols-3 gap-2 w-full mb-6 text-center text-xs">
-        <div class="bg-slate-900/70 p-2.5 rounded-2xl border border-cyan-500/20 flex flex-col items-center">
-          <i class="fa-solid fa-cube text-cyan-400 text-base mb-1"></i>
-          <span class="font-bold text-slate-200 text-[11px]">Model 3D</span>
-          <span class="text-[9px] text-slate-400">solar_system_animation.glb</span>
-        </div>
-        <div class="bg-slate-900/70 p-2.5 rounded-2xl border border-cyan-500/20 flex flex-col items-center">
-          <i class="fa-solid fa-camera text-cyan-400 text-base mb-1"></i>
-          <span class="font-bold text-slate-200 text-[11px]">Mode AR</span>
-          <span class="text-[9px] text-slate-400">Kamera Real-time</span>
-        </div>
-        <div class="bg-slate-900/70 p-2.5 rounded-2xl border border-cyan-500/20 flex flex-col items-center">
-          <i class="fa-solid fa-person-walking text-cyan-400 text-base mb-1"></i>
-          <span class="font-bold text-slate-200 text-[11px]">Walkaround</span>
-          <span class="text-[9px] text-slate-400">Keliling 360°</span>
-        </div>
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="w-full flex flex-col gap-3">
-        <button id="btn-start-ar" onclick="requestCameraAndLaunch('ar')" class="w-full py-4 px-6 rounded-2xl font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 active:scale-95 transition flex items-center justify-center gap-3 group">
-          <i class="fa-solid fa-camera text-lg group-hover:scale-110 transition-transform"></i>
-          <span>Izinkan Kamera & Mulai AR</span>
-        </button>
-
-        <button onclick="requestCameraAndLaunch('3d')" class="w-full py-3 px-6 rounded-2xl font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 active:scale-95 transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-cubes text-cyan-400"></i>
-          <span>Eksplorasi 3D Tanpa Kamera</span>
-        </button>
-      </div>
-
-      <p class="text-[11px] text-slate-400 mt-5 flex items-center justify-center gap-1.5">
-        <i class="fa-solid fa-shield-halved text-cyan-400"></i>
-        <span>Izin kamera hanya digunakan untuk menampilkan proyeksi AR di lingkungan Anda.</span>
-      </p>
-    </div>
-  </div>
-
-  <!-- =========================================================
-       2. A-FRAME 3D / AR SCENE (NO VR)
-       ========================================================= -->
-  <a-scene
-    embedded
-    planet-screen-picker
-    renderer="alpha: true; colorManagement: true; antialias: true; exposure: 1.2;"
-    vr-mode-ui="enabled: false">
-
-    <!-- ASSET MANAGEMENT (Primary GLTF Model) -->
-    <a-assets timeout="4000">
-      <a-asset-item id="primary-solar-glb" src="Assets/solar_system_animation.glb"></a-asset-item>
-    </a-assets>
-
-    <!-- PLACED SOLAR SYSTEM CONTAINER -->
-    <a-entity id="placed-solar-system" position="0 1.0 -2.8" scale="0.35 0.35 0.35">
-
-      <!-- 1. PRIMARY GLTF ANIMATED MODEL (solar_system_animation.glb) -->
-      <a-entity id="gltf-model-node" 
-                gltf-model="#primary-solar-glb"
-                animation-mixer
-                position="0 0 0"
-                scale="1 1 1"
-                class="clickable"
-                planet-inspector
-                solar-model-status
-                data-name="Matahari & Sistem Tata Surya">
-      </a-entity>
-
-      <!-- 2. PROCEDURAL 3D SOLAR SYSTEM FALLBACK (Shown automatically if GLB not present) -->
-      <a-entity id="solar-system-fallback" visible="false">
-        <!-- SUN -->
-        <a-sphere id="sun_node" planet-inspector data-name="Matahari" radius="0.55" color="#fcd34d" material="emissive: #fbbf24; emissiveIntensity: 0.8; shader: standard">
-          <a-light type="point" intensity="2.5" distance="20" color="#fef3c7"></a-light>
-        </a-sphere>
-
-        <!-- MERCURY -->
-        <a-entity orbit-anim="speed: 4">
-          <a-sphere planet-inspector data-name="Merkurius" position="0.9 0 0" radius="0.05" color="#a3a3a3"></a-sphere>
-          <a-ring rotation="90 0 0" radius-inner="0.89" radius-outer="0.91" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- VENUS -->
-        <a-entity orbit-anim="speed: 3">
-          <a-sphere planet-inspector data-name="Venus" position="1.3 0 0" radius="0.08" color="#fde047"></a-sphere>
-          <a-ring rotation="90 0 0" radius-inner="1.29" radius-outer="1.31" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- EARTH & MOON -->
-        <a-entity orbit-anim="speed: 2">
-          <a-entity position="1.8 0 0">
-            <a-sphere planet-inspector data-name="Bumi" radius="0.1" color="#38bdf8"></a-sphere>
-            <a-entity orbit-anim="speed: 8">
-              <a-sphere planet-inspector data-name="Bulan" position="0.22 0 0" radius="0.028" color="#cbd5e1"></a-sphere>
-            </a-entity>
-          </a-entity>
-          <a-ring rotation="90 0 0" radius-inner="1.79" radius-outer="1.81" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- MARS -->
-        <a-entity orbit-anim="speed: 1.5">
-          <a-sphere planet-inspector data-name="Mars" position="2.3 0 0" radius="0.07" color="#f87171"></a-sphere>
-          <a-ring rotation="90 0 0" radius-inner="2.29" radius-outer="2.31" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- JUPITER -->
-        <a-entity orbit-anim="speed: 0.8">
-          <a-sphere planet-inspector data-name="Jupiter" position="3.1 0 0" radius="0.22" color="#fb923c"></a-sphere>
-          <a-ring rotation="90 0 0" radius-inner="3.09" radius-outer="3.11" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- SATURN -->
-        <a-entity orbit-anim="speed: 0.5">
-          <a-entity position="3.9 0 0">
-            <a-sphere planet-inspector data-name="Saturnus" radius="0.18" color="#fef08a"></a-sphere>
-            <a-ring rotation="75 0 0" radius-inner="0.24" radius-outer="0.42" color="#fef08a" material="shader: flat; opacity: 0.7; side: double; transparent: true"></a-ring>
-          </a-entity>
-          <a-ring rotation="90 0 0" radius-inner="3.89" radius-outer="3.91" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- URANUS -->
-        <a-entity orbit-anim="speed: 0.3">
-          <a-sphere planet-inspector data-name="Uranus" position="4.6 0 0" radius="0.14" color="#22d3ee"></a-sphere>
-          <a-ring rotation="90 0 0" radius-inner="4.59" radius-outer="4.61" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-
-        <!-- NEPTUNE -->
-        <a-entity orbit-anim="speed: 0.2">
-          <a-sphere planet-inspector data-name="Neptunus" position="5.3 0 0" radius="0.13" color="#6366f1"></a-sphere>
-          <a-ring rotation="90 0 0" radius-inner="5.29" radius-outer="5.31" color="#475569" material="shader: flat; opacity: 0.3; side: double"></a-ring>
-        </a-entity>
-      </a-entity>
-
-    </a-entity>
-
-    <!-- LIGHTING & SKY BACKGROUND -->
-    <a-light type="ambient" color="#ffffff" intensity="0.9"></a-light>
-    <a-light type="directional" position="5 10 7" intensity="1.2"></a-light>
-    <a-sky id="sky-bg" color="#020617" opacity="1"></a-sky>
-
-    <!-- CAMERA RIG WITH WALKAROUND CONTROLS -->
-    <a-entity id="camera-rig" position="0 0 0">
-      <a-camera id="main-camera" cursor="rayOrigin: mouse" raycaster="objects: .clickable" look-controls="pointerLockEnabled: false" wasd-controls="fly: true; acceleration: 20"></a-camera>
-    </a-entity>
-
-  </a-scene>
-
-  <!-- =========================================================
-       3. UI OVERLAY LAYER (HUD & WALKAROUND NAVIGATION)
-       ========================================================= -->
-  <div id="ui-overlay" class="fixed inset-0 pointer-events-none z-20 hidden flex flex-col justify-between p-3 sm:p-5">
-
-    <!-- TOP BAR -->
-    <div class="flex justify-between items-start w-full gap-2">
-      <div class="glass-panel p-3 rounded-2xl pointer-events-auto max-w-xs shadow-xl">
-        <div class="flex items-center gap-2 text-cyan-400 mb-1">
-          <i class="fa-solid fa-camera-rotate text-lg"></i>
-          <h1 class="font-bold text-sm sm:text-base leading-none" id="mode-title">AR Solar System</h1>
-        </div>
-        <p class="text-[11px] text-slate-300">Gunakan D-Pad / WASD untuk mengelilingi model Tata Surya.</p>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="flex items-center gap-2 pointer-events-auto">
-        <button onclick="backToMenu()" title="Kembali ke Start Menu" class="glass-panel bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2.5 rounded-2xl font-semibold flex items-center gap-2 transition-all shadow-lg active:scale-95 text-xs">
-          <i class="fa-solid fa-house text-cyan-400"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- INSTRUCTION BADGE -->
-    <div class="self-center my-2 pointer-events-auto">
-      <div id="instruction-text" class="glass-panel px-4 py-2 rounded-full text-xs text-cyan-200 font-medium border border-cyan-500/30 shadow-xl text-center">
-        AR Kamera Aktif — Berjalanlah di sekitar model 3D
-      </div>
-    </div>
-
-    <!-- BOTTOM HUD & WALKAROUND D-PAD NAVIGATION -->
-    <div id="hud-panel" class="w-full max-w-2xl mx-auto flex flex-col gap-3 pointer-events-auto">
-
-      <!-- PLANET INFO CARD -->
-      <div id="planet-card" class="glass-panel p-4 rounded-3xl border-slate-700/80 hidden transition-all shadow-2xl">
-        <div class="flex justify-between items-start mb-1">
-          <div>
-            <span class="text-[10px] tracking-widest text-cyan-400 font-mono uppercase font-semibold">Detail Objek</span>
-            <h2 id="planet-title" class="text-xl font-black text-white">Bumi</h2>
-          </div>
-          <button onclick="hidePlanetInfo()" class="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition">
-            <i class="fa-solid fa-xmark text-lg"></i>
-          </button>
-        </div>
-        <p id="planet-desc" class="text-xs text-slate-300 leading-relaxed mb-3">
-          Planet ketiga dari Matahari dan tempat tinggal kita.
-        </p>
-        <div class="grid grid-cols-3 gap-2 text-center text-xs">
-          <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/50">
-            <span class="block text-slate-400 text-[9px]">TIPE</span>
-            <span id="planet-type" class="font-bold text-cyan-300">Terrestrial</span>
-          </div>
-          <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/50">
-            <span class="block text-slate-400 text-[9px]">JARAK</span>
-            <span id="planet-dist" class="font-bold text-cyan-300">1.00 AU</span>
-          </div>
-          <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-700/50">
-            <span class="block text-slate-400 text-[9px]">SATELIT</span>
-            <span id="planet-moons" class="font-bold text-cyan-300">1</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- WALKAROUND CONTROLS & MODEL SLIDER -->
-      <div class="glass-panel p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg">
-        
-        <!-- WALKAROUND D-PAD (Navigasi Keliling Model) -->
-        <div class="flex items-center gap-1.5 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-700/60 text-xs">
-          <span class="text-[10px] text-slate-400 font-mono px-1">Keliling:</span>
-          
-          <button onmousedown="startWalk('forward')" onmouseup="stopWalk()" ontouchstart="startWalk('forward')" ontouchend="stopWalk()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-cyan-400 active:scale-90 transition" title="Maju">
-            <i class="fa-solid fa-arrow-up"></i>
-          </button>
-          <button onmousedown="startWalk('backward')" onmouseup="stopWalk()" ontouchstart="startWalk('backward')" ontouchend="stopWalk()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-cyan-400 active:scale-90 transition" title="Mundur">
-            <i class="fa-solid fa-arrow-down"></i>
-          </button>
-          <button onmousedown="startWalk('left')" onmouseup="stopWalk()" ontouchstart="startWalk('left')" ontouchend="stopWalk()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-cyan-400 active:scale-90 transition" title="Kiri">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-          <button onmousedown="startWalk('right')" onmouseup="stopWalk()" ontouchstart="startWalk('right')" ontouchend="stopWalk()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-cyan-400 active:scale-90 transition" title="Kanan">
-            <i class="fa-solid fa-arrow-right"></i>
-          </button>
-          <button onmousedown="startWalk('up')" onmouseup="stopWalk()" ontouchstart="startWalk('up')" ontouchend="stopWalk()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-cyan-400 active:scale-90 transition" title="Naik">
-            <i class="fa-solid fa-circle-chevron-up"></i>
-          </button>
-          <button onmousedown="startWalk('down')" onmouseup="stopWalk()" ontouchstart="startWalk('down')" ontouchend="stopWalk()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-cyan-400 active:scale-90 transition" title="Turun">
-            <i class="fa-solid fa-circle-chevron-down"></i>
-          </button>
-        </div>
-
-        <!-- MODEL ROTATION & SCALE -->
-        <div class="flex items-center gap-3 flex-1 min-w-[180px] justify-end">
-          <button onclick="rotateModel(30)" class="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl text-cyan-400 text-xs active:scale-90 transition" title="Putar Model">
-            <i class="fa-solid fa-rotate"></i>
-          </button>
-
-          <div class="flex items-center gap-2 flex-1 max-w-[130px]">
-            <i class="fa-solid fa-expand text-xs text-slate-400"></i>
-            <input type="range" id="scale-slider" min="0.05" max="1.0" step="0.05" value="0.35" oninput="updateScale(this.value)" class="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg appearance-none">
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-  </div>
-
-  <!-- =========================================================
-       4. APPLICATION LOGIC JAVASCRIPT
-       ========================================================= -->
-  <script>
-    /* Planet Info Database */
-    const planetData = {
-      "Matahari": { desc: "Bintang di pusat Sistem Tata Surya. Mengandung 99.86% massa seluruh Tata Surya.", type: "Bintang (G2V)", dist: "0.00 AU", moons: "0" },
-      "Merkurius": { desc: "Planet terkecil dan terdekat dengan Matahari. Memiliki variasi suhu ekstrim.", type: "Terrestrial", dist: "0.39 AU", moons: "0" },
-      "Venus": { desc: "Memiliki atmosfer tebal yang memerangkap panas dalam efek rumah kaca ekstrim.", type: "Terrestrial", dist: "0.72 AU", moons: "0" },
-      "Bumi": { desc: "Planet tempat tinggal kita dan satu-satunya dunia yang diketahui mendukung kehidupan.", type: "Terrestrial", dist: "1.00 AU", moons: "1" },
-      "Bulan": { desc: "Satelit alami Bumi yang memengaruhi pasang surut air laut di Bumi.", type: "Satelit", dist: "1.00 AU", moons: "N/A" },
-      "Mars": { desc: "Planet Merah dingin berdebu dengan atmosfer tipis dan gunung berapi raksasa.", type: "Terrestrial", dist: "1.52 AU", moons: "2" },
-      "Jupiter": { desc: "Planet terbesar di Tata Surya dengan Bintik Merah Raksasa yang ikonik.", type: "Gas Giant", dist: "5.20 AU", moons: "95" },
-      "Saturnus": { desc: "Dikenal dengan sistem cincin es spektakuler yang mengelilinginya.", type: "Gas Giant", dist: "9.58 AU", moons: "146" },
-      "Uranus": { desc: "Raksasa es dengan kemiringan rotasi ekstrim hampir sejajar dengan orbitnya.", type: "Ice Giant", dist: "19.22 AU", moons: "28" },
-      "Neptunus": { desc: "Planet terluar di Tata Surya dengan angin tercepat yang pernah dicatat.", type: "Ice Giant", dist: "30.05 AU", moons: "16" },
-      "Matahari & Sistem Tata Surya": { desc: "Model 3D Animasi Kompleks Tata Surya (solar_system_animation.glb).", type: "System", dist: "N/A", moons: "N/A" }
-    };
-
-    let walkInterval = null;
-    let cameraStream = null;
-
-    /* Camera Permission & Mode Launcher */
-    async function requestCameraAndLaunch(mode) {
-      const startMenu = document.getElementById('start-menu');
-      const uiOverlay = document.getElementById('ui-overlay');
-      const skyBg = document.getElementById('sky-bg');
-      const videoEl = document.getElementById('camera-feed');
-      const modeTitle = document.getElementById('mode-title');
-      const instructionText = document.getElementById('instruction-text');
-
-      if (mode === 'ar') {
-        try {
-          // Request camera stream explicitly
-          cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } }
+        document.querySelectorAll("[mindar-image-target]").forEach((target) => {
+          target.addEventListener("targetFound", () => {
+            const key = target.dataset.planet;
+            activeTargets.add(key);
+            showPlanet(key);
           });
+          target.addEventListener("targetLost", () => {
+            activeTargets.delete(target.dataset.planet);
+            const nextTarget = Array.from(activeTargets).pop();
+            if (nextTarget) {
+              showPlanet(nextTarget);
+            } else {
+              planetCard.hidden = true;
+              scanStatus.textContent = "Marker tidak terlihat. Arahkan kamera ke marker planet.";
+            }
+          });
+        });
 
-          if (videoEl) {
-            videoEl.srcObject = cameraStream;
-            await videoEl.play();
-            videoEl.classList.remove('hidden');
-          }
-
-          if (skyBg) skyBg.setAttribute('material', 'opacity: 0');
-          if (modeTitle) modeTitle.innerText = "AR Solar System";
-          if (instructionText) instructionText.innerText = "Mode AR Kamera Aktif — Berjalanlah di sekitar model";
-
-        } catch (err) {
-          console.warn('Akses kamera ditolak atau tidak tersedia:', err);
-          if (skyBg) skyBg.setAttribute('material', 'opacity: 1');
-          if (modeTitle) modeTitle.innerText = "3D Solar System";
-          if (instructionText) instructionText.innerText = "Akses kamera tidak aktif. Menampilkan Mode 3D.";
-        }
-      } else {
-        if (skyBg) skyBg.setAttribute('material', 'opacity: 1');
-        if (modeTitle) modeTitle.innerText = "3D Solar System";
-        if (instructionText) instructionText.innerText = "Mode 3D Interaktif — Berjalanlah di sekitar model";
-      }
-
-      startMenu?.classList.add('hidden');
-      uiOverlay?.classList.remove('hidden');
-    }
-
-    /* Return to Start Menu */
-    function backToMenu() {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-      }
-      const videoEl = document.getElementById('camera-feed');
-      if (videoEl) {
-        videoEl.pause();
-        videoEl.srcObject = null;
-        videoEl.classList.add('hidden');
-      }
-
-      document.getElementById('ui-overlay')?.classList.add('hidden');
-      document.getElementById('start-menu')?.classList.remove('hidden');
-    }
-
-    /* Walkaround Navigation Logic */
-    function startWalk(direction) {
-      stopWalk();
-      const rig = document.getElementById('camera-rig');
-      if (!rig) return;
-
-      const step = 0.15;
-      walkInterval = setInterval(() => {
-        const pos = rig.getAttribute('position');
-        if (direction === 'forward') pos.z -= step;
-        if (direction === 'backward') pos.z += step;
-        if (direction === 'left') pos.x -= step;
-        if (direction === 'right') pos.x += step;
-        if (direction === 'up') pos.y += step;
-        if (direction === 'down') pos.y -= step;
-        rig.setAttribute('position', pos);
-      }, 50);
-    }
-
-    function stopWalk() {
-      if (walkInterval) {
-        clearInterval(walkInterval);
-        walkInterval = null;
-      }
-    }
-
-    /* Scale & Rotate Model */
-    function updateScale(val) {
-      const system = document.getElementById('placed-solar-system');
-      if (system) {
-        system.setAttribute('scale', `${val} ${val} ${val}`);
-      }
-    }
-
-    function rotateModel(degrees) {
-      const system = document.getElementById('placed-solar-system');
-      if (system) {
-        const rot = system.getAttribute('rotation');
-        rot.y += degrees;
-        system.setAttribute('rotation', rot);
-      }
-    }
-
-    /* Planet Info Card Handlers */
-    window.showPlanetInfo = function(name) {
-      const card = document.getElementById('planet-card');
-      const data = planetData[name] || planetData["Bumi"];
-
-      document.getElementById('planet-title').textContent = name;
-      document.getElementById('planet-desc').textContent = data.desc;
-      document.getElementById('planet-type').textContent = data.type;
-      document.getElementById('planet-dist').textContent = data.dist;
-      document.getElementById('planet-moons').textContent = data.moons;
-
-      card?.classList.remove('hidden');
-    };
-
-    function hidePlanetInfo() {
-      document.getElementById('planet-card')?.classList.add('hidden');
-    }
-  </script>
-</body>
+        prepareTargets();
+      })();
+    </script>
+  </body>
 </html>
