@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#050816">
     <title>Solar System WebAR</title>
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <!-- A-Frame 1.5.0 = versi yang didokumentasikan kompatibel dengan MindAR 1.2.x -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- Build non-A-Frame berisi Compiler (dipakai untuk kompilasi marker di browser) -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
+    <script>
+      // Simpan referensi Compiler agar tidak hilang bila build A-Frame menimpa window.MINDAR
+      window.__MindARCompiler = window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler;
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <style>
       :root {
@@ -298,8 +305,7 @@
     <a-scene
       id="ar-scene"
       mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
-      color-space="sRGB"
-      renderer="colorManagement: true; physicallyCorrectLights: true"
+      renderer="alpha: true; antialias: true"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
       <a-assets timeout="30000">
@@ -317,7 +323,7 @@
 
       <a-light type="ambient" color="#ffffff" intensity="1"></a-light>
       <a-light type="directional" color="#ffffff" intensity="1.2" position="-1 2 3"></a-light>
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0" data-planet="sun">
         <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0"></a-gltf-model>
@@ -339,7 +345,7 @@
       </a-entity>
       <a-entity mindar-image-target="targetIndex: 6" data-planet="saturn">
         <a-sphere radius="0.21" position="0 0 0.2" material="src: #texture-saturn; roughness: 1; metalness: 0"></a-sphere>
-        <a-torus radius="0.32" radius-tubular="0.035" rotation="24 0 0" position="0 0 0.2" material="src: #texture-saturn-ring; roughness: 1; metalness: 0"></a-torus>
+        <a-torus radius="0.32" radius-tubular="0.035" rotation="24 0 0" position="0 0 0.2" material="src: #texture-saturn-ring; roughness: 1; metalness: 0; transparent: true; side: double"></a-torus>
       </a-entity>
       <a-entity mindar-image-target="targetIndex: 7" data-planet="uranus">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-uranus; roughness: 1; metalness: 0"></a-sphere>
@@ -410,6 +416,7 @@
         const planetCard = document.getElementById("planet-card");
         const scene = document.getElementById("ar-scene");
         const activeTargets = new Set();
+        let targetUrl = null;
 
         function showPlanet(key) {
           const planet = planets[key];
@@ -418,6 +425,55 @@
           document.getElementById("planet-description").textContent = planet.description;
           planetCard.hidden = false;
           scanStatus.textContent = `Marker ${planet.name} terdeteksi`;
+        }
+
+        // Pastikan gambar benar-benar berhasil dimuat (termasuk yang sudah gagal sebelum script ini jalan)
+        function waitForImage(image) {
+          return new Promise((resolve, reject) => {
+            const fail = () => reject(new Error(`Gambar marker "${image.getAttribute("src")}" gagal dimuat. Periksa nama file dan folder Markers (huruf besar/kecil berpengaruh).`));
+            if (image.complete) {
+              if (image.naturalWidth > 0) resolve();
+              else fail();
+              return;
+            }
+            image.addEventListener("load", resolve, { once: true });
+            image.addEventListener("error", fail, { once: true });
+          });
+        }
+
+        // Scene (termasuk semua asset) harus selesai dimuat sebelum AR dikonfigurasi
+        function waitForScene() {
+          if (scene.hasLoaded) return Promise.resolve();
+          return new Promise((resolve, reject) => {
+            const timeoutId = window.setTimeout(() => {
+              scene.removeEventListener("loaded", onLoaded);
+              reject(new Error("Aset 3D/tekstur belum selesai dimuat. Periksa path folder Assets lalu muat ulang halaman."));
+            }, 40000);
+            function onLoaded() {
+              window.clearTimeout(timeoutId);
+              resolve();
+            }
+            scene.addEventListener("loaded", onLoaded, { once: true });
+          });
+        }
+
+        // mindar-image hanya membaca imageTargetSrc saat init, jadi
+        // setelah kompilasi, URL harus diberikan langsung ke system.
+        function configureAR(arSystem) {
+          const component = scene.components && scene.components["mindar-image"];
+          const base = (component && component.data) || {};
+          const config = Object.assign({}, base, {
+            imageTargetSrc: targetUrl,
+            autoStart: false,
+            uiLoading: "no",
+            uiScanning: "no",
+            uiError: "no"
+          });
+          if (typeof arSystem.setup === "function") {
+            arSystem.setup(config);
+          } else {
+            arSystem.imageTargetSrc = targetUrl;
+          }
         }
 
         function startAR(arSystem) {
@@ -458,35 +514,24 @@
 
         async function prepareTargets() {
           try {
-            if (!window.MINDAR || !window.MINDAR.IMAGE || !window.MINDAR.IMAGE.Compiler) {
+            const Compiler = window.__MindARCompiler
+              || (window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler);
+            if (!Compiler) {
               throw new Error("Library AR tidak berhasil dimuat. Periksa koneksi internet lalu muat ulang halaman.");
             }
 
             const images = markerIds.map((id) => document.getElementById(id));
-            await Promise.all(images.map((image) => {
-              if (image.complete && image.naturalWidth > 0) return Promise.resolve();
-              return new Promise((resolve, reject) => {
-                image.addEventListener("load", resolve, { once: true });
-                image.addEventListener("error", () => reject(new Error(`Gambar marker ${image.id} gagal dimuat.`)), { once: true });
-              });
-            }));
+            await Promise.all(images.map(waitForImage));
 
             setupStatus.textContent = "Menganalisis 9 gambar marker...";
-            const compiler = new MINDAR.IMAGE.Compiler();
+            const compiler = new Compiler();
             await compiler.compileImageTargets(images, (progress) => {
               const percent = Math.max(0, Math.min(100, Math.round(progress)));
               progressBar.style.width = `${percent}%`;
               setupStatus.textContent = `Menyiapkan marker... ${percent}%`;
             });
             const targetData = await compiler.exportData();
-            const targetUrl = URL.createObjectURL(new Blob([targetData], { type: "application/octet-stream" }));
-            scene.setAttribute("mindar-image", {
-              imageTargetSrc: targetUrl,
-              autoStart: false,
-              uiLoading: "no",
-              uiScanning: "no",
-              uiError: "no"
-            });
+            targetUrl = URL.createObjectURL(new Blob([targetData], { type: "application/octet-stream" }));
 
             startButton.disabled = false;
             startButton.textContent = "Mulai AR";
@@ -511,17 +556,26 @@
             return;
           }
 
+          const arSystem = scene.systems["mindar-image-system"];
           try {
-            const arSystem = scene.systems["mindar-image-system"];
             if (!arSystem) throw new Error("Sistem AR belum siap. Muat ulang halaman dan coba lagi.");
+            if (!targetUrl) throw new Error("Marker belum selesai disiapkan. Tunggu hingga proses selesai.");
+
+            setupStatus.textContent = "Memuat aset 3D...";
+            await waitForScene();
+            configureAR(arSystem);
+
             setupStatus.textContent = "Izinkan akses kamera di browser. Menunggu kamera siap...";
             await startAR(arSystem);
             welcomeScreen.classList.add("is-hidden");
             scannerUi.classList.add("is-visible");
             scanStatus.textContent = "Arahkan kamera ke salah satu marker.";
           } catch (error) {
+            // Bersihkan sisa sesi kamera supaya percobaan ulang tidak membuat video ganda
+            try { if (arSystem) arSystem.stop(); } catch (_) { /* belum sempat berjalan */ }
             startButton.disabled = false;
             startButton.textContent = "Coba Mulai AR";
+            setupStatus.textContent = "Marker siap. Tekan tombol untuk mencoba lagi.";
             errorMessage.textContent = error.name === "NotAllowedError"
               ? "Izin kamera ditolak. Izinkan akses kamera di pengaturan browser, lalu coba lagi."
               : (error.message || "Kamera tidak dapat dimulai. Pastikan tidak sedang digunakan aplikasi lain.");
