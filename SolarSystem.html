@@ -329,6 +329,21 @@
         text-shadow: 0 2px 8px #000;
       }
 
+      #debug-panel {
+        position: fixed;
+        top: 64px;
+        left: 10px;
+        z-index: 4;
+        max-width: calc(100% - 20px);
+        padding: 6px 9px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #9dffc9;
+        font: 0.68rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+        pointer-events: none;
+        white-space: pre-wrap;
+      }
+
       .a-enter-vr,
       .mindar-ui-overlay {
         display: none !important;
@@ -393,6 +408,8 @@
       </div>
     </div>
 
+    <div id="debug-panel" hidden></div>
+
     <div id="target-images" hidden aria-hidden="true">
       <img id="target-sun" src="./Markers/Sun.png" alt="">
       <img id="target-mercury" src="./Markers/Mercury.png" alt="">
@@ -407,7 +424,7 @@
 
     <a-scene
       id="ar-scene"
-      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 12; missTolerance: 6;"
+      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 15; missTolerance: 6;"
       renderer="alpha: true; antialias: true"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
@@ -431,29 +448,29 @@
       <a-entity mindar-image-target="targetIndex: 0" data-planet="sun">
         <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0"></a-gltf-model>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 1" data-planet="mercury">
+      <a-entity mindar-image-target="targetIndex: 8" data-planet="mercury">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mercury; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 2" data-planet="venus">
+      <a-entity mindar-image-target="targetIndex: 1" data-planet="venus">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-venus; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 3" data-planet="earth">
+      <a-entity mindar-image-target="targetIndex: 2" data-planet="earth">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-earth; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 4" data-planet="mars">
+      <a-entity mindar-image-target="targetIndex: 3" data-planet="mars">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mars; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 5" data-planet="jupiter">
+      <a-entity mindar-image-target="targetIndex: 4" data-planet="jupiter">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-jupiter; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 6" data-planet="saturn">
+      <a-entity mindar-image-target="targetIndex: 5" data-planet="saturn">
         <a-sphere radius="0.21" position="0 0 0.2" material="src: #texture-saturn; roughness: 1; metalness: 0"></a-sphere>
         <a-torus radius="0.32" radius-tubular="0.035" rotation="24 0 0" position="0 0 0.2" material="src: #texture-saturn-ring; roughness: 1; metalness: 0; transparent: true; side: double"></a-torus>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 7" data-planet="uranus">
+      <a-entity mindar-image-target="targetIndex: 6" data-planet="uranus">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-uranus; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 8" data-planet="neptune">
+      <a-entity mindar-image-target="targetIndex: 7" data-planet="neptune">
         <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-neptune; roughness: 1; metalness: 0"></a-sphere>
       </a-entity>
     </a-scene>
@@ -588,16 +605,18 @@
             fun: "Neptunus baru menyelesaikan satu putaran penuh mengelilingi Matahari sejak penemuannya pada tahun 2011."
           }
         };
+        // URUTAN INI HARUS SAMA DENGAN targetIndex 0-8 pada <a-entity mindar-image-target> di bawah.
+        // Marker yang paling sering salah terdeteksi diletakkan paling akhir.
         const markerIds = [
           "target-sun",
-          "target-mercury",
           "target-venus",
           "target-earth",
           "target-mars",
           "target-jupiter",
           "target-saturn",
           "target-uranus",
-          "target-neptune"
+          "target-neptune",
+          "target-mercury"
         ];
         const welcomeScreen = document.getElementById("welcome-screen");
         const startButton = document.getElementById("start-button");
@@ -614,9 +633,16 @@
         const planetFun = document.getElementById("planet-fun");
         const cardToggle = document.getElementById("card-toggle");
         const scene = document.getElementById("ar-scene");
-        const CONFIRM_MS = 450; // marker harus terdeteksi stabil selama ini sebelum konten tampil
+        const BASE_CONFIRM_MS = 600;   // marker harus terdeteksi terus-menerus selama ini
+        const PENALTY_STEP_MS = 300;   // tambahan waktu tiap kali marker ini "alarm palsu"
+        const MAX_CONFIRM_MS = 1800;
+        const PENALTY_RESET_MS = 6000; // penalti hilang bila tidak ada alarm palsu selama ini
         const confirmedTargets = new Set();
         const confirmTimers = new Map();
+        const falseAlarms = new Map();
+        const debugPanel = document.getElementById("debug-panel");
+        const debugEnabled = new URLSearchParams(window.location.search).has("debug");
+        const debugLines = [];
         let targetUrl = null;
 
         function showPlanet(key) {
@@ -802,6 +828,15 @@
           }
         });
 
+        function logDebug(message) {
+          if (!debugEnabled) return;
+          const time = (performance.now() / 1000).toFixed(1).padStart(6, " ");
+          debugLines.unshift(`${time}s  ${message}`);
+          debugLines.length = Math.min(debugLines.length, 8);
+          debugPanel.textContent = debugLines.join("\n");
+          debugPanel.hidden = false;
+        }
+
         // Konten 3D disembunyikan sampai marker terbukti stabil,
         // sehingga deteksi palsu sesaat tidak menampilkan planet yang salah.
         function setContentVisible(target, visible) {
@@ -818,25 +853,51 @@
           }
         }
 
+        // Marker yang berkali-kali muncul lalu hilang sebelum stabil dianggap
+        // sering salah deteksi, sehingga waktu konfirmasinya diperpanjang otomatis.
+        function confirmDelay(key) {
+          const record = falseAlarms.get(key);
+          if (!record) return BASE_CONFIRM_MS;
+          if (performance.now() - record.last > PENALTY_RESET_MS) {
+            falseAlarms.delete(key);
+            return BASE_CONFIRM_MS;
+          }
+          return Math.min(MAX_CONFIRM_MS, BASE_CONFIRM_MS + record.count * PENALTY_STEP_MS);
+        }
+
         document.querySelectorAll("[mindar-image-target]").forEach((target) => {
           const key = target.dataset.planet;
           setContentVisible(target, false);
 
           target.addEventListener("targetFound", () => {
+            const delay = confirmDelay(key);
+            logDebug(`found   ${key} (konfirmasi ${delay} ms)`);
             window.clearTimeout(confirmTimers.get(key));
             confirmTimers.set(key, window.setTimeout(() => {
               confirmTimers.delete(key);
+              falseAlarms.delete(key);
               confirmedTargets.add(key);
               setContentVisible(target, true);
+              logDebug(`TAMPIL  ${key}`);
               refreshCard();
-            }, CONFIRM_MS));
+            }, delay));
           });
 
           target.addEventListener("targetLost", () => {
+            const wasPending = confirmTimers.has(key);
             window.clearTimeout(confirmTimers.get(key));
             confirmTimers.delete(key);
             confirmedTargets.delete(key);
             setContentVisible(target, false);
+            if (wasPending) {
+              const record = falseAlarms.get(key) || { count: 0, last: 0 };
+              record.count += 1;
+              record.last = performance.now();
+              falseAlarms.set(key, record);
+              logDebug(`ABAIKAN ${key} (hilang sebelum stabil, #${record.count})`);
+            } else {
+              logDebug(`lost    ${key}`);
+            }
             refreshCard();
           });
         });
