@@ -3,27 +3,44 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#050816">
+    <meta name="theme-color" content="#0b0e24">
+    <meta name="color-scheme" content="dark">
     <title>Solar System WebAR</title>
-    <!-- A-Frame 1.5.0 = versi yang didokumentasikan kompatibel dengan MindAR 1.2.x -->
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- Build non-A-Frame berisi Compiler (dipakai untuk kompilasi marker di browser) -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
-    <script>
-      // Simpan referensi Compiler agar tidak hilang bila build A-Frame menimpa window.MINDAR
-      window.__MindARCompiler = window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler;
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <!-- Font: dimuat dengan display=swap, jadi tetap terbaca (font sistem) bila offline -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Instrument+Sans:wght@400..600&display=swap">
+
+    <!-- CSS diletakkan sebelum script besar agar latar gelap langsung tampil, bukan layar putih -->
     <style>
       :root {
         color-scheme: dark;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #050816;
-        color: #f4f7ff;
+        --space: #0b0e24;
+        --panel: #0f1330;
+        --raised: #1c2250;
+        --line: rgba(188, 198, 255, 0.16);
+        --text: #eef0fb;
+        --soft: #d3d8f1;
+        --muted: #a6aed3;
+        --sun: #ffb938;
+        --accent: var(--sun);
+        --accent-soft: rgba(255, 185, 56, 0.2);
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+        --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-family: var(--font-body);
+        background: var(--space);
+        color: var(--text);
       }
 
       * {
         box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
       }
 
       html,
@@ -32,13 +49,13 @@
         height: 100%;
         margin: 0;
         overflow: hidden;
+        background: var(--space);
       }
 
-      body {
-        background:
-          radial-gradient(ellipse at 50% 110%, rgba(62, 68, 160, 0.3), transparent 48%),
-          radial-gradient(ellipse at 12% 12%, rgba(26, 76, 125, 0.2), transparent 36%),
-          #050816;
+      h1,
+      h2,
+      p {
+        margin-top: 0;
       }
 
       body > video {
@@ -51,14 +68,39 @@
         z-index: 1;
       }
 
+      .a-enter-vr,
+      .mindar-ui-overlay {
+        display: none !important;
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:focus-visible {
+        outline: 3px solid #fff;
+        outline-offset: 3px;
+      }
+
+      /* ---------- Layar awal ---------- */
+
       .screen {
         position: fixed;
         inset: 0;
         z-index: 5;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-        background: linear-gradient(180deg, rgba(4, 8, 22, 0.58), rgba(4, 8, 22, 0.82));
+        display: flex;
+        overflow-y: auto;
+        padding: calc(var(--safe-top) + 20px) 22px calc(var(--safe-bottom) + 20px);
+        background:
+          radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.55) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 82% 9%, rgba(255, 255, 255, 0.45) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 91% 42%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 6% 63%, rgba(255, 255, 255, 0.4) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 34% 91%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 73% 84%, rgba(255, 255, 255, 0.4) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 48% 6%, rgba(255, 255, 255, 0.35) 0 1px, transparent 1.5px),
+          var(--space);
         transition: opacity 250ms ease, visibility 250ms ease;
       }
 
@@ -68,109 +110,215 @@
         pointer-events: none;
       }
 
-      .welcome-card {
-        width: min(100%, 520px);
-        padding: clamp(26px, 6vw, 46px);
-        border: 1px solid rgba(159, 190, 255, 0.2);
-        border-radius: 26px;
-        background: linear-gradient(145deg, rgba(16, 27, 56, 0.94), rgba(9, 14, 34, 0.94));
-        box-shadow: 0 24px 90px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-        text-align: center;
+      .welcome {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
+        align-items: center;
+        width: min(100%, 980px);
+        margin: auto;
       }
 
-      .eyebrow {
-        margin: 0 0 12px;
-        color: #83d6ff;
-        font-size: 0.72rem;
-        font-weight: 750;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
+      .orrery {
+        order: -1;
+        justify-self: center;
+        width: min(66vw, 31vh, 300px);
+        margin: 0;
+        aspect-ratio: 1;
       }
 
-      h1,
-      h2,
-      p {
-        margin-top: 0;
+      .orrery svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .orbit-line {
+        fill: none;
+        stroke: rgba(188, 198, 255, 0.15);
+        stroke-width: 1;
+      }
+
+      .orbiter {
+        transform-box: view-box;
+        transform-origin: 210px 210px;
+        animation: orbit var(--t) linear infinite;
+        animation-delay: var(--d);
+      }
+
+      @keyframes orbit {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .welcome-copy {
+        max-width: 460px;
       }
 
       h1 {
         margin-bottom: 12px;
-        font-size: clamp(2rem, 8vw, 3.4rem);
-        line-height: 1;
-        letter-spacing: -0.055em;
+        font-family: var(--font-display);
+        font-size: clamp(2.5rem, 10vw, 4.2rem);
+        font-weight: 800;
+        line-height: 0.98;
+        letter-spacing: -0.035em;
       }
 
-      .intro {
-        max-width: 390px;
-        margin: 0 auto 24px;
-        color: #bbc7e4;
-        line-height: 1.65;
+      .lead {
+        max-width: 34ch;
+        margin-bottom: 20px;
+        color: var(--soft);
+        font-size: 1.05rem;
+        line-height: 1.55;
       }
 
-      .marker-list {
+      .steps {
+        display: grid;
+        gap: 8px;
+        margin: 0 0 20px;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+      }
+
+      .steps li {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        align-items: baseline;
+        font-size: 0.92rem;
+        line-height: 1.4;
+        counter-increment: step;
+      }
+
+      .steps li::before {
+        content: counter(step);
+        color: var(--sun);
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .legend {
         display: flex;
         flex-wrap: wrap;
-        justify-content: center;
-        gap: 8px;
-        margin: 0 auto 25px;
+        gap: 6px 14px;
+        margin: 0 0 24px;
+        padding: 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+        list-style: none;
       }
 
-      .marker-list span {
-        padding: 7px 11px;
-        border: 1px solid rgba(151, 177, 232, 0.19);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.045);
-        color: #dce7ff;
-        font-size: 0.78rem;
+      .legend li {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
       }
 
-      button {
-        min-height: 50px;
-        padding: 0 26px;
+      .legend li::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--c);
+      }
+
+      .primary {
+        position: relative;
+        isolation: isolate;
+        width: 100%;
+        max-width: 360px;
+        min-height: 54px;
+        padding: 0 28px;
+        overflow: hidden;
         border: 0;
         border-radius: 14px;
-        background: linear-gradient(110deg, #68d5ff, #a98aff);
-        color: #091326;
-        font: inherit;
-        font-weight: 800;
-        cursor: pointer;
-        box-shadow: 0 8px 28px rgba(94, 177, 255, 0.25);
+        background: var(--sun);
+        color: #1b1303;
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 700;
+        transition: transform 120ms ease;
       }
 
-      button:disabled {
+      .primary:active:not(:disabled) {
+        transform: scale(0.98);
+      }
+
+      /* Saat disiapkan, tombol sendiri berfungsi sebagai bar progres */
+      .primary::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        width: var(--progress, 0%);
+        background: rgba(255, 185, 56, 0.3);
+        transition: width 180ms ease;
+      }
+
+      .primary:disabled {
+        background: var(--raised);
+        color: var(--text);
         cursor: wait;
-        opacity: 0.58;
+      }
+
+      .primary:not(:disabled)::before {
+        display: none;
       }
 
       #setup-status,
       #error-message {
-        min-height: 1.4em;
-        margin: 14px 0 0;
-        color: #aebcda;
-        font-size: 0.83rem;
+        max-width: 42ch;
+        margin: 12px 0 0;
+        font-size: 0.84rem;
         line-height: 1.5;
       }
 
+      #setup-status {
+        color: var(--muted);
+      }
+
       #error-message {
-        color: #ffb4b4;
+        color: #ff9f9f;
       }
 
-      .progress-track {
-        width: 100%;
-        height: 4px;
-        margin-top: 12px;
-        overflow: hidden;
-        border-radius: 5px;
-        background: rgba(255, 255, 255, 0.1);
+      #error-message.is-warning {
+        color: #ffd27a;
       }
 
-      #progress-bar {
-        width: 0;
-        height: 100%;
-        border-radius: inherit;
-        background: #83d6ff;
-        transition: width 160ms ease;
+      #error-message:empty {
+        display: none;
       }
+
+      @media (min-width: 720px) {
+        .welcome {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 56px;
+        }
+
+        .orrery {
+          order: 0;
+          width: min(100%, 460px, 80vh);
+        }
+      }
+
+      @media (max-height: 680px) and (max-width: 719px) {
+        .lead {
+          margin-bottom: 14px;
+        }
+
+        .steps {
+          margin-bottom: 14px;
+        }
+
+        .legend {
+          margin-bottom: 16px;
+        }
+      }
+
+      /* ---------- Layar pemindai ---------- */
 
       #scanner-ui {
         position: fixed;
@@ -179,7 +327,8 @@
         display: none;
         flex-direction: column;
         justify-content: space-between;
-        padding: max(18px, env(safe-area-inset-top)) 18px max(22px, env(safe-area-inset-bottom));
+        gap: 12px;
+        padding: calc(var(--safe-top) + 12px) 14px calc(var(--safe-bottom) + 14px);
         pointer-events: none;
       }
 
@@ -187,89 +336,153 @@
         display: flex;
       }
 
-      .scanner-top,
-      .planet-card {
-        width: min(100%, 440px);
-        margin-inline: auto;
-        border: 1px solid rgba(167, 195, 255, 0.2);
-        background: rgba(7, 13, 31, 0.78);
-        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(16px);
-      }
-
       .scanner-top {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        border-radius: 16px;
-        color: #d9e5ff;
+        gap: 10px;
+        width: min(100%, 460px);
+        margin-inline: auto;
+        padding: 7px 7px 7px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(11, 14, 36, 0.82);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         font-size: 0.88rem;
       }
 
       .scan-dot {
+        flex: none;
         width: 10px;
         height: 10px;
-        flex: 0 0 auto;
         border-radius: 50%;
-        background: #77e3bd;
-        box-shadow: 0 0 14px #77e3bd;
+        background: var(--sun);
+        animation: pulse 1.4s ease-in-out infinite;
       }
 
-      .scanner-bottom {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        width: 100%;
+      #scanner-ui.is-found .scan-dot {
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+        animation: none;
+      }
+
+      @keyframes pulse {
+        50% {
+          opacity: 0.35;
+        }
+      }
+
+      #scan-status {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.35;
+      }
+
+      .chip-button {
+        flex: none;
+        min-height: 36px;
+        padding: 0 15px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-size: 0.8rem;
+        font-weight: 600;
+        pointer-events: auto;
+      }
+
+      .reticle {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        transition: opacity 200ms ease;
+      }
+
+      #scanner-ui.is-found .reticle {
+        opacity: 0;
+      }
+
+      .reticle-frame {
+        position: relative;
+        width: min(62vw, 44vh, 300px);
+        aspect-ratio: 1;
+      }
+
+      .reticle-frame i {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 3px solid rgba(255, 255, 255, 0.85);
+      }
+
+      .reticle-frame i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+      .reticle-frame i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 10px; }
+      .reticle-frame i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 10px; }
+      .reticle-frame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+
+      .reticle-frame::after {
+        content: "";
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        top: 6%;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--sun);
+        box-shadow: 0 0 12px var(--sun);
+        animation: sweep 2.2s ease-in-out infinite alternate;
+      }
+
+      @keyframes sweep {
+        to {
+          top: 94%;
+        }
       }
 
       .planet-card {
-        padding: 14px 16px;
-        border-radius: 19px;
-        max-height: min(38vh, 330px);
+        width: min(100%, 460px);
+        max-height: min(46vh, 390px);
+        margin-inline: auto;
+        padding: 18px 16px 14px;
         overflow-y: auto;
         overscroll-behavior: contain;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: rgba(15, 19, 48, 0.94);
+        box-shadow: inset 0 4px 0 var(--accent), 0 18px 48px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
         pointer-events: auto;
-        text-align: left;
       }
 
       .planet-head {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 12px;
       }
 
       .planet-head h2 {
         margin: 0;
-        color: #94dcff;
-        font-size: 1.2rem;
-        line-height: 1.15;
+        font-family: var(--font-display);
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
       }
 
-      .planet-type {
-        display: block;
-        margin-top: 3px;
-        color: #9fb3da;
-        font-size: 0.74rem;
-      }
-
-      .card-toggle {
-        flex: 0 0 auto;
-        min-height: 32px;
-        padding: 0 13px;
-        border: 1px solid rgba(167, 195, 255, 0.3);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.06);
-        color: #dce7ff;
-        font-size: 0.74rem;
-        font-weight: 700;
-        box-shadow: none;
+      #planet-type {
+        margin: 5px 0 0;
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1.35;
       }
 
       .planet-body {
-        margin-top: 10px;
+        margin-top: 12px;
       }
 
       .planet-card.is-collapsed .planet-body {
@@ -278,137 +491,254 @@
 
       #planet-description {
         margin: 0;
-        color: #d1dcf4;
-        font-size: 0.86rem;
-        line-height: 1.55;
+        color: var(--soft);
+        font-size: 0.87rem;
+        line-height: 1.6;
       }
 
       .facts {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 6px;
-        margin: 12px 0 0;
+        margin: 14px 0 0;
       }
 
       .fact {
-        padding: 8px 10px;
-        border: 1px solid rgba(167, 195, 255, 0.12);
-        border-radius: 11px;
+        padding: 9px 11px;
+        border-radius: 12px;
         background: rgba(255, 255, 255, 0.05);
       }
 
       .fact dt {
-        color: #8fa6d3;
-        font-size: 0.64rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        color: var(--muted);
+        font-size: 0.72rem;
       }
 
       .fact dd {
         margin: 2px 0 0;
-        color: #eaf1ff;
-        font-size: 0.8rem;
-        font-weight: 650;
+        font-size: 0.86rem;
+        font-weight: 600;
         line-height: 1.35;
+        font-variant-numeric: tabular-nums;
       }
 
-      #planet-fun {
-        margin: 12px 0 0;
-        padding-top: 10px;
-        border-top: 1px solid rgba(167, 195, 255, 0.15);
-        color: #b9c8e8;
-        font-size: 0.82rem;
-        line-height: 1.5;
+      .fun {
+        margin: 14px 0 0;
+        padding-left: 12px;
+        border-left: 3px solid var(--accent);
+        color: var(--soft);
+        font-size: 0.84rem;
+        line-height: 1.55;
       }
 
-      .scanner-hint {
-        margin: 0;
-        color: #e7edff;
-        font-size: 0.78rem;
-        text-align: center;
-        text-shadow: 0 2px 8px #000;
-      }
-
-      #debug-panel {
-        position: fixed;
-        top: 64px;
-        left: 10px;
-        z-index: 4;
-        max-width: calc(100% - 20px);
-        padding: 6px 9px;
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.6);
-        color: #9dffc9;
-        font: 0.68rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
-        pointer-events: none;
-        white-space: pre-wrap;
-      }
-
-      .a-enter-vr,
-      .mindar-ui-overlay {
-        display: none !important;
+      .fun strong {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--accent);
       }
 
       @media (max-height: 520px) {
         .facts {
           grid-template-columns: repeat(3, minmax(0, 1fr));
         }
+
+        .planet-card {
+          max-height: 56vh;
+        }
       }
 
-      @media (max-height: 680px) {
-        .welcome-card {
-          padding-block: 23px;
+      @media (prefers-reduced-motion: reduce) {
+        .orbiter,
+        .scan-dot,
+        .reticle-frame::after {
+          animation: none;
         }
 
-        .intro {
-          margin-bottom: 15px;
-        }
-
-        .marker-list {
-          margin-bottom: 16px;
+        .screen,
+        .primary,
+        .primary::before {
+          transition: none;
         }
       }
     </style>
+
+    <!-- A-Frame 1.5.0 = versi yang didokumentasikan kompatibel dengan MindAR 1.2.x -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- Build non-A-Frame berisi Compiler (dipakai untuk kompilasi marker di browser) -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
+    <script>
+      // Simpan referensi Compiler agar tidak hilang bila build A-Frame menimpa window.MINDAR
+      window.__MindARCompiler = window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler;
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script>
+      // Komponen A-Frame kustom. Harus didaftarkan sebelum <a-scene> dibaca, jadi diletakkan di <head>.
+
+      // Memutar animasi bawaan file .glb (A-Frame tidak memainkannya otomatis).
+      AFRAME.registerComponent("gltf-autoplay", {
+        init() {
+          this.mixer = null;
+          this.el.addEventListener("model-loaded", (event) => {
+            const model = event.detail && event.detail.model;
+            const clips = (model && model.animations) || [];
+            if (!clips.length) return;
+            this.mixer = new AFRAME.THREE.AnimationMixer(model);
+            clips.forEach((clip) => this.mixer.clipAction(clip).play());
+          });
+        },
+        tick(time, delta) {
+          if (this.mixer) this.mixer.update(delta / 1000);
+        },
+        remove() {
+          if (this.mixer) {
+            this.mixer.stopAllAction();
+            this.mixer = null;
+          }
+        }
+      });
+
+      // Cincin Saturnus berupa cakram datar. Tekstur berbentuk strip (lebar >> tinggi)
+      // dipetakan secara radial; tekstur persegi memakai pemetaan bawaan.
+      AFRAME.registerComponent("saturn-ring", {
+        schema: {
+          src: { type: "selector" },
+          inner: { default: 0.29 },
+          outer: { default: 0.52 }
+        },
+        init() {
+          this.mesh = null;
+          this.build = this.build.bind(this);
+          const image = this.data.src;
+          if (image && !image.complete) {
+            image.addEventListener("load", this.build, { once: true });
+          } else {
+            this.build();
+          }
+        },
+        build() {
+          if (this.mesh) return;
+          const THREE = AFRAME.THREE;
+          const { src: image, inner, outer } = this.data;
+          const geometry = new THREE.RingGeometry(inner, outer, 128, 1);
+          let map = null;
+
+          if (image && image.naturalWidth > 0) {
+            if (image.naturalWidth / image.naturalHeight > 3) {
+              const position = geometry.attributes.position;
+              const uv = geometry.attributes.uv;
+              for (let i = 0; i < position.count; i += 1) {
+                const radius = Math.hypot(position.getX(i), position.getY(i));
+                uv.setXY(i, (radius - inner) / (outer - inner), 0.5);
+              }
+            }
+            map = new THREE.Texture(image);
+            if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
+            map.needsUpdate = true;
+          }
+
+          const material = new THREE.MeshStandardMaterial({
+            map,
+            color: map ? 0xffffff : 0xd9c28f,
+            roughness: 1,
+            metalness: 0,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false
+          });
+          this.mesh = new THREE.Mesh(geometry, material);
+          this.el.setObject3D("mesh", this.mesh);
+        },
+        remove() {
+          if (!this.mesh) return;
+          this.el.removeObject3D("mesh");
+          this.mesh.geometry.dispose();
+          if (this.mesh.material.map) this.mesh.material.map.dispose();
+          this.mesh.material.dispose();
+          this.mesh = null;
+        }
+      });
+    </script>
   </head>
   <body>
     <main id="welcome-screen" class="screen">
-      <section class="welcome-card" aria-labelledby="page-title">
-        <p class="eyebrow">Pengalaman Augmented Reality</p>
-        <h1 id="page-title">Solar System</h1>
-        <p class="intro">Jelajahi tata surya dengan memindai salah satu marker planet. Izinkan akses kamera saat AR dimulai.</p>
-        <div class="marker-list" aria-label="Marker yang didukung">
-          <span>Matahari</span><span>Merkurius</span><span>Venus</span><span>Bumi</span><span>Mars</span>
-          <span>Jupiter</span><span>Saturnus</span><span>Uranus</span><span>Neptunus</span>
-        </div>
-        <button id="start-button" type="button" disabled>Menyiapkan marker...</button>
-        <p id="setup-status" role="status">Memuat gambar marker...</p>
-        <div class="progress-track" aria-hidden="true"><div id="progress-bar"></div></div>
-        <p id="error-message" role="alert"></p>
-      </section>
+      <div class="welcome">
+        <figure class="orrery">
+          <svg viewBox="0 0 420 420" role="img" aria-label="Delapan planet mengorbit Matahari">
+            <circle class="orbit-line" cx="210" cy="210" r="34"/>
+            <circle class="orbit-line" cx="210" cy="210" r="54"/>
+            <circle class="orbit-line" cx="210" cy="210" r="76"/>
+            <circle class="orbit-line" cx="210" cy="210" r="100"/>
+            <circle class="orbit-line" cx="210" cy="210" r="128"/>
+            <circle class="orbit-line" cx="210" cy="210" r="156"/>
+            <circle class="orbit-line" cx="210" cy="210" r="178"/>
+            <circle class="orbit-line" cx="210" cy="210" r="196"/>
+
+            <circle cx="210" cy="210" r="26" fill="#ffb938" opacity="0.16"/>
+            <circle cx="210" cy="210" r="16" fill="#ffb938"/>
+
+            <g class="orbiter" style="--t: 7s; --d: -1s"><circle cx="210" cy="176" r="3" fill="#c2b8a8"/></g>
+            <g class="orbiter" style="--t: 11s; --d: -6s"><circle cx="210" cy="156" r="5" fill="#e9b872"/></g>
+            <g class="orbiter" style="--t: 16s; --d: -3s"><circle cx="210" cy="134" r="5.5" fill="#5fb0ff"/></g>
+            <g class="orbiter" style="--t: 23s; --d: -14s"><circle cx="210" cy="110" r="4" fill="#ef6f45"/></g>
+            <g class="orbiter" style="--t: 36s; --d: -20s"><circle cx="210" cy="82" r="11" fill="#e0a77e"/></g>
+            <g class="orbiter" style="--t: 52s; --d: -33s"><circle cx="210" cy="54" r="9" fill="#ecd08f"/></g>
+            <g class="orbiter" style="--t: 74s; --d: -9s"><circle cx="210" cy="32" r="6.5" fill="#86e0e3"/></g>
+            <g class="orbiter" style="--t: 100s; --d: -60s"><circle cx="210" cy="14" r="6.5" fill="#6f86ff"/></g>
+          </svg>
+        </figure>
+
+        <section class="welcome-copy" aria-labelledby="page-title">
+          <h1 id="page-title">Solar System</h1>
+          <p class="lead">Pindai kartu planet dengan kamera, lalu lihat planetnya muncul di atas kartu.</p>
+          <ol class="steps">
+            <li>Tekan Mulai AR dan izinkan akses kamera.</li>
+            <li>Arahkan kamera ke salah satu kartu marker.</li>
+            <li>Baca fakta planetnya di kartu yang muncul.</li>
+          </ol>
+          <ul class="legend" aria-label="Marker yang didukung">
+            <li style="--c: #ffb938">Matahari</li>
+            <li style="--c: #c2b8a8">Merkurius</li>
+            <li style="--c: #e9b872">Venus</li>
+            <li style="--c: #5fb0ff">Bumi</li>
+            <li style="--c: #ef6f45">Mars</li>
+            <li style="--c: #e0a77e">Jupiter</li>
+            <li style="--c: #ecd08f">Saturnus</li>
+            <li style="--c: #86e0e3">Uranus</li>
+            <li style="--c: #6f86ff">Neptunus</li>
+          </ul>
+          <button id="start-button" class="primary" type="button" disabled>Menyiapkan marker...</button>
+          <p id="setup-status" role="status">Memuat gambar marker...</p>
+          <p id="error-message" role="alert"></p>
+        </section>
+      </div>
     </main>
 
-    <div id="scanner-ui" aria-live="polite">
-      <div class="scanner-top"><span class="scan-dot"></span><span id="scan-status">Arahkan kamera ke salah satu marker.</span></div>
-      <div class="scanner-bottom">
-        <section id="planet-card" class="planet-card" hidden>
-          <div class="planet-head">
-            <div>
-              <h2 id="planet-name"></h2>
-              <span id="planet-type" class="planet-type"></span>
-            </div>
-            <button id="card-toggle" class="card-toggle" type="button" aria-expanded="true" aria-controls="planet-body">Ringkas</button>
-          </div>
-          <div id="planet-body" class="planet-body">
-            <p id="planet-description"></p>
-            <dl id="planet-facts" class="facts"></dl>
-            <p id="planet-fun"></p>
-          </div>
-        </section>
-        <p class="scanner-hint">Jaga marker tetap terlihat di dalam kamera</p>
+    <div id="scanner-ui">
+      <div class="scanner-top">
+        <span class="scan-dot" aria-hidden="true"></span>
+        <span id="scan-status" role="status">Arahkan kamera ke salah satu kartu marker.</span>
+        <button id="stop-button" class="chip-button" type="button" aria-label="Tutup kamera">Tutup</button>
       </div>
-    </div>
 
-    <div id="debug-panel" hidden></div>
+      <div class="reticle" aria-hidden="true">
+        <div class="reticle-frame"><i></i><i></i><i></i><i></i></div>
+      </div>
+
+      <section id="planet-card" class="planet-card" hidden>
+        <div class="planet-head">
+          <div>
+            <h2 id="planet-name"></h2>
+            <p id="planet-type"></p>
+          </div>
+          <button id="card-toggle" class="chip-button" type="button" aria-expanded="true" aria-controls="planet-body">Ringkas</button>
+        </div>
+        <div id="planet-body" class="planet-body">
+          <p id="planet-description"></p>
+          <dl id="planet-facts" class="facts"></dl>
+          <p class="fun"><strong>Tahukah kamu?</strong><span id="planet-fun-text"></span></p>
+        </div>
+      </section>
+    </div>
 
     <div id="target-images" hidden aria-hidden="true">
       <img id="target-sun" src="./Markers/Sun.png" alt="">
@@ -424,7 +754,7 @@
 
     <a-scene
       id="ar-scene"
-      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 15; missTolerance: 6;"
+      mindar-image="autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 12; missTolerance: 6;"
       renderer="alpha: true; antialias: true"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
@@ -445,33 +775,67 @@
       <a-light type="directional" color="#ffffff" intensity="1.2" position="-1 2 3"></a-light>
       <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
 
+      <!-- Setiap planet berputar pada porosnya; arah putar dan kemiringan sumbu mengikuti data aslinya -->
       <a-entity mindar-image-target="targetIndex: 0" data-planet="sun">
-        <a-gltf-model src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" rotation="0 0 0"></a-gltf-model>
+        <a-gltf-model id="sun-model" src="#solar-system-model" position="0 0 0.08" scale="0.012 0.012 0.012" gltf-autoplay></a-gltf-model>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 8" data-planet="mercury">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mercury; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 1" data-planet="mercury">
+        <a-entity position="0 0 0.2">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-mercury; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 40000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 1" data-planet="venus">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-venus; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 2" data-planet="venus">
+        <a-entity position="0 0 0.2">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-venus; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 -360 0; dur: 40000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 2" data-planet="earth">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-earth; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 3" data-planet="earth">
+        <a-entity position="0 0 0.2" rotation="0 0 23.4">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-earth; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 20000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 3" data-planet="mars">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-mars; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 4" data-planet="mars">
+        <a-entity position="0 0 0.2">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-mars; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 20000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 4" data-planet="jupiter">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-jupiter; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 5" data-planet="jupiter">
+        <a-entity position="0 0 0.2">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-jupiter; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 10000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 5" data-planet="saturn">
-        <a-sphere radius="0.21" position="0 0 0.2" material="src: #texture-saturn; roughness: 1; metalness: 0"></a-sphere>
-        <a-torus radius="0.32" radius-tubular="0.035" rotation="24 0 0" position="0 0 0.2" material="src: #texture-saturn-ring; roughness: 1; metalness: 0; transparent: true; side: double"></a-torus>
+
+      <!-- Sumbu Saturnus dimiringkan ke arah kamera agar cincinnya terlihat sebagai elips -->
+      <a-entity mindar-image-target="targetIndex: 6" data-planet="saturn">
+        <a-entity position="0 0 0.2" rotation="25 0 -18">
+          <a-sphere radius="0.21" segments-width="64" segments-height="48" material="src: #texture-saturn; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 12000; easing: linear; loop: true"></a-sphere>
+          <a-entity saturn-ring="src: #texture-saturn-ring; inner: 0.29; outer: 0.52" rotation="-90 0 0"></a-entity>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 6" data-planet="uranus">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-uranus; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 7" data-planet="uranus">
+        <a-entity position="0 0 0.2" rotation="0 0 98">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-uranus; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 -360 0; dur: 16000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
-      <a-entity mindar-image-target="targetIndex: 7" data-planet="neptune">
-        <a-sphere radius="0.23" position="0 0 0.2" material="src: #texture-neptune; roughness: 1; metalness: 0"></a-sphere>
+
+      <a-entity mindar-image-target="targetIndex: 8" data-planet="neptune">
+        <a-entity position="0 0 0.2">
+          <a-sphere radius="0.23" segments-width="64" segments-height="48" material="src: #texture-neptune; roughness: 1; metalness: 0"
+            animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 14000; easing: linear; loop: true"></a-sphere>
+        </a-entity>
       </a-entity>
     </a-scene>
 
@@ -480,7 +844,8 @@
         const planets = {
           sun: {
             name: "Matahari",
-            type: "Bintang • Kerdil kuning (tipe G)",
+            color: "#ffb938",
+            type: "Bintang kerdil kuning (tipe G)",
             description: "Matahari adalah bintang di pusat tata surya yang menyumbang sekitar 99,8% dari seluruh massa tata surya. Energinya berasal dari fusi nuklir di inti, yang mengubah hidrogen menjadi helium dan memancarkan cahaya serta panas ke seluruh planet. Gravitasinya menjaga semua planet tetap berada di orbitnya.",
             facts: [
               ["Diameter", "≈ 1,39 juta km (±109× Bumi)"],
@@ -494,7 +859,8 @@
           },
           mercury: {
             name: "Merkurius",
-            type: "Planet kebumian • Planet terdalam",
+            color: "#c2b8a8",
+            type: "Planet kebumian, paling dekat dengan Matahari",
             description: "Merkurius adalah planet terkecil dan terdekat dengan Matahari. Permukaannya berbatu dan dipenuhi kawah seperti Bulan, dengan atmosfer yang sangat tipis sehingga hampir tidak menahan panas. Akibatnya, suhu siang dan malamnya berbeda sangat jauh.",
             facts: [
               ["Diameter", "4.879 km"],
@@ -508,7 +874,8 @@
           },
           venus: {
             name: "Venus",
-            type: "Planet kebumian • Planet terpanas",
+            color: "#e9b872",
+            type: "Planet kebumian, paling panas",
             description: "Venus berukuran hampir sama dengan Bumi, tetapi diselimuti atmosfer tebal yang didominasi karbon dioksida dan awan asam sulfat. Efek rumah kaca yang ekstrem membuat permukaannya lebih panas daripada Merkurius, dengan tekanan udara sekitar 90 kali tekanan di Bumi.",
             facts: [
               ["Diameter", "12.104 km"],
@@ -522,7 +889,8 @@
           },
           earth: {
             name: "Bumi",
-            type: "Planet kebumian • Satu-satunya yang diketahui berpenghuni",
+            color: "#5fb0ff",
+            type: "Planet kebumian, satu-satunya yang diketahui berpenghuni",
             description: "Bumi adalah planet ketiga dari Matahari dan satu-satunya dunia yang diketahui memiliki kehidupan. Sekitar 71% permukaannya tertutup air, dan atmosfer yang kaya nitrogen dan oksigen melindungi makhluk hidup serta menjaga suhu tetap stabil. Medan magnetnya menahan partikel berbahaya dari Matahari.",
             facts: [
               ["Diameter", "12.742 km"],
@@ -536,7 +904,8 @@
           },
           mars: {
             name: "Mars",
-            type: "Planet kebumian • Planet merah",
+            color: "#ef6f45",
+            type: "Planet kebumian, si planet merah",
             description: "Mars tampak merah karena permukaannya kaya besi oksida (karat). Planet ini memiliki Olympus Mons, gunung berapi terbesar yang diketahui di tata surya, serta lembah raksasa Valles Marineris. Lembah sungai purba dan endapan mineral menunjukkan bahwa Mars pernah memiliki air cair.",
             facts: [
               ["Diameter", "6.779 km"],
@@ -550,7 +919,8 @@
           },
           jupiter: {
             name: "Jupiter",
-            type: "Raksasa gas • Planet terbesar",
+            color: "#e0a77e",
+            type: "Raksasa gas, planet terbesar",
             description: "Jupiter adalah planet terbesar, dengan massa lebih dari dua kali massa semua planet lain digabungkan. Atmosfernya didominasi hidrogen dan helium, dengan pita awan berwarna serta badai raksasa Bintik Merah Besar yang telah diamati selama berabad-abad. Satelitnya, Ganymede, adalah satelit terbesar di tata surya.",
             facts: [
               ["Diameter", "≈ 139.820 km"],
@@ -564,21 +934,23 @@
           },
           saturn: {
             name: "Saturnus",
-            type: "Raksasa gas • Planet bercincin",
+            color: "#ecd08f",
+            type: "Raksasa gas, planet bercincin",
             description: "Saturnus terkenal dengan sistem cincinnya yang luas, tersusun dari kepingan es dan batu berukuran dari butiran debu hingga bongkahan sebesar rumah. Planet ini sebagian besar terdiri dari hidrogen dan helium, dengan kerapatan rata-rata lebih rendah daripada air. Satelit terbesarnya, Titan, memiliki atmosfer tebal dan danau metana cair.",
             facts: [
               ["Diameter", "≈ 116.460 km"],
               ["Jarak dari Matahari", "≈ 1,43 miliar km (9,6 SA)"],
               ["Revolusi", "≈ 29,5 tahun"],
               ["Rotasi", "≈ 10 jam 33 menit"],
-              ["Satelit", "140+"],
+              ["Satelit", "270+ (terus bertambah)"],
               ["Suhu awan", "≈ −140 °C"]
             ],
             fun: "Karena kerapatannya rendah, Saturnus secara teori akan mengapung jika ada bak air yang cukup besar."
           },
           uranus: {
             name: "Uranus",
-            type: "Raksasa es • Planet yang berguling",
+            color: "#86e0e3",
+            type: "Raksasa es, planet yang berguling",
             description: "Uranus berwarna biru kehijauan karena metana di atmosfernya menyerap cahaya merah. Sumbu rotasinya miring sekitar 98°, sehingga planet ini seolah berputar sambil berguling mengelilingi Matahari. Uranus memiliki 13 cincin yang redup dan puluhan satelit, banyak di antaranya dinamai dari tokoh karya Shakespeare.",
             facts: [
               ["Diameter", "≈ 50.724 km"],
@@ -592,7 +964,8 @@
           },
           neptune: {
             name: "Neptunus",
-            type: "Raksasa es • Planet terjauh",
+            color: "#6f86ff",
+            type: "Raksasa es, planet terjauh",
             description: "Neptunus adalah planet terjauh dari Matahari dan ditemukan pada tahun 1846 lewat perhitungan matematika sebelum diamati langsung. Atmosfernya berwarna biru pekat dan memiliki angin tercepat di tata surya, dengan kecepatan hingga sekitar 2.000 km/jam. Satelit terbesarnya, Triton, mengorbit berlawanan arah dengan rotasi planet.",
             facts: [
               ["Diameter", "≈ 49.244 km"],
@@ -605,53 +978,78 @@
             fun: "Neptunus baru menyelesaikan satu putaran penuh mengelilingi Matahari sejak penemuannya pada tahun 2011."
           }
         };
-        // URUTAN INI HARUS SAMA DENGAN targetIndex 0-8 pada <a-entity mindar-image-target> di bawah.
-        // Marker yang paling sering salah terdeteksi diletakkan paling akhir.
+
         const markerIds = [
-          "target-sun",
-          "target-venus",
-          "target-earth",
-          "target-mars",
-          "target-jupiter",
-          "target-saturn",
-          "target-uranus",
-          "target-neptune",
-          "target-mercury"
+          "target-sun", "target-mercury", "target-venus", "target-earth", "target-mars",
+          "target-jupiter", "target-saturn", "target-uranus", "target-neptune"
         ];
-        const welcomeScreen = document.getElementById("welcome-screen");
-        const startButton = document.getElementById("start-button");
-        const setupStatus = document.getElementById("setup-status");
-        const errorMessage = document.getElementById("error-message");
-        const progressBar = document.getElementById("progress-bar");
-        const scannerUi = document.getElementById("scanner-ui");
-        const scanStatus = document.getElementById("scan-status");
-        const planetCard = document.getElementById("planet-card");
-        const planetName = document.getElementById("planet-name");
-        const planetType = document.getElementById("planet-type");
-        const planetDescription = document.getElementById("planet-description");
-        const planetFacts = document.getElementById("planet-facts");
-        const planetFun = document.getElementById("planet-fun");
-        const cardToggle = document.getElementById("card-toggle");
-        const scene = document.getElementById("ar-scene");
-        const BASE_CONFIRM_MS = 600;   // marker harus terdeteksi terus-menerus selama ini
-        const PENALTY_STEP_MS = 300;   // tambahan waktu tiap kali marker ini "alarm palsu"
-        const MAX_CONFIRM_MS = 1800;
-        const PENALTY_RESET_MS = 6000; // penalti hilang bila tidak ada alarm palsu selama ini
+
+        const $ = (id) => document.getElementById(id);
+        const welcomeScreen = $("welcome-screen");
+        const startButton = $("start-button");
+        const stopButton = $("stop-button");
+        const setupStatus = $("setup-status");
+        const errorMessage = $("error-message");
+        const scannerUi = $("scanner-ui");
+        const scanStatus = $("scan-status");
+        const planetCard = $("planet-card");
+        const planetName = $("planet-name");
+        const planetType = $("planet-type");
+        const planetDescription = $("planet-description");
+        const planetFacts = $("planet-facts");
+        const planetFunText = $("planet-fun-text");
+        const cardToggle = $("card-toggle");
+        const scene = $("ar-scene");
+        const sunModel = $("sun-model");
+
+        const CONFIRM_MS = 450; // marker harus terdeteksi stabil selama ini sebelum konten tampil
+        const SEARCHING_TEXT = "Arahkan kamera ke salah satu kartu marker.";
+        const FILE_HINT = "Halaman ini dibuka langsung dari file (file://), sehingga browser memblokir pemuatan model dan tekstur. Jalankan lewat server lokal, misalnya `python -m http.server` lalu buka http://localhost:8000, atau unggah ke hosting HTTPS.";
+        const isFileProtocol = location.protocol === "file:";
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
         const confirmedTargets = new Set();
         const confirmTimers = new Map();
-        const falseAlarms = new Map();
-        const debugPanel = document.getElementById("debug-panel");
-        const debugEnabled = new URLSearchParams(window.location.search).has("debug");
-        const debugLines = [];
         let targetUrl = null;
+        let mode = "preparing"; // preparing | ready | starting | reload
+        let arRunning = false;
+        let currentKey = null;
+        let sunModelFailed = false;
+
+        // ---------- Pembantu UI ----------
+
+        function setButton(nextMode, label, busy) {
+          mode = nextMode;
+          startButton.textContent = label;
+          startButton.disabled = Boolean(busy);
+        }
+
+        function setProgress(percent) {
+          startButton.style.setProperty("--progress", `${percent}%`);
+        }
+
+        function showMessage(text, kind) {
+          errorMessage.textContent = text || "";
+          errorMessage.classList.toggle("is-warning", kind === "warning");
+        }
+
+        sunModel.addEventListener("model-error", () => {
+          sunModelFailed = true;
+        });
+
+        // ---------- Kartu info planet ----------
 
         function showPlanet(key) {
           const planet = planets[key];
           if (!planet) return;
+
+          scannerUi.style.setProperty("--accent", planet.color);
+          scannerUi.style.setProperty("--accent-soft", `${planet.color}33`);
+
           planetName.textContent = planet.name;
           planetType.textContent = planet.type;
           planetDescription.textContent = planet.description;
-          planetFun.textContent = `Tahukah kamu? ${planet.fun}`;
+          planetFunText.textContent = planet.fun;
           planetFacts.replaceChildren(...planet.facts.map(([label, value]) => {
             const item = document.createElement("div");
             item.className = "fact";
@@ -662,9 +1060,38 @@
             item.append(term, detail);
             return item;
           }));
+
+          const changed = currentKey !== key;
           planetCard.hidden = false;
           planetCard.scrollTop = 0;
-          scanStatus.textContent = `Marker ${planet.name} terdeteksi`;
+          scannerUi.classList.add("is-found");
+          scanStatus.textContent = key === "sun" && sunModelFailed
+            ? "Marker Matahari terdeteksi, tetapi model 3D gagal dimuat."
+            : `Marker ${planet.name} terdeteksi`;
+
+          if (changed && !reduceMotion && planetCard.animate) {
+            planetCard.animate(
+              [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
+              { duration: 220, easing: "ease-out" }
+            );
+          }
+          currentKey = key;
+        }
+
+        function hideCard(message) {
+          planetCard.hidden = true;
+          currentKey = null;
+          scannerUi.classList.remove("is-found");
+          scanStatus.textContent = message;
+        }
+
+        function refreshCard() {
+          const latest = Array.from(confirmedTargets).pop();
+          if (latest) {
+            showPlanet(latest);
+          } else {
+            hideCard("Marker tidak terlihat. Arahkan kamera kembali ke kartu.");
+          }
         }
 
         cardToggle.addEventListener("click", () => {
@@ -673,10 +1100,13 @@
           cardToggle.setAttribute("aria-expanded", String(!collapsed));
         });
 
+        // ---------- Persiapan marker ----------
+
         // Pastikan gambar benar-benar berhasil dimuat (termasuk yang sudah gagal sebelum script ini jalan)
         function waitForImage(image) {
           return new Promise((resolve, reject) => {
-            const fail = () => reject(new Error(`Gambar marker "${image.getAttribute("src")}" gagal dimuat. Periksa nama file dan folder Markers (huruf besar/kecil berpengaruh).`));
+            const name = (image.getAttribute("src") || "").replace("./", "");
+            const fail = () => reject(new Error(name));
             if (image.complete) {
               if (image.naturalWidth > 0) resolve();
               else fail();
@@ -688,13 +1118,13 @@
         }
 
         // Scene (termasuk semua asset) harus selesai dimuat sebelum AR dikonfigurasi
-        function waitForScene() {
+        function waitForScene(timeoutMs) {
           if (scene.hasLoaded) return Promise.resolve();
           return new Promise((resolve, reject) => {
             const timeoutId = window.setTimeout(() => {
               scene.removeEventListener("loaded", onLoaded);
               reject(new Error("Aset 3D/tekstur belum selesai dimuat. Periksa path folder Assets lalu muat ulang halaman."));
-            }, 40000);
+            }, timeoutMs);
             function onLoaded() {
               window.clearTimeout(timeoutId);
               resolve();
@@ -702,6 +1132,67 @@
             scene.addEventListener("loaded", onLoaded, { once: true });
           });
         }
+
+        // Tekstur yang gagal dimuat tidak membuat A-Frame berhenti; planet hanya tampil polos.
+        function findBrokenTextures() {
+          return Array.from(document.querySelectorAll("a-assets img"))
+            .filter((image) => image.complete && image.naturalWidth === 0)
+            .map((image) => (image.getAttribute("src") || "").replace("./", ""));
+        }
+
+        async function prepareTargets() {
+          setButton("preparing", "Menyiapkan marker...", true);
+          setProgress(0);
+          showMessage("");
+          if (isFileProtocol) showMessage(FILE_HINT, "warning");
+
+          try {
+            const Compiler = window.__MindARCompiler
+              || (window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler);
+            if (!Compiler) {
+              throw new Error("Library AR tidak berhasil dimuat. Periksa koneksi internet lalu muat ulang halaman.");
+            }
+
+            const images = markerIds.map($);
+            const results = await Promise.allSettled(images.map(waitForImage));
+            const missing = results.filter((r) => r.status === "rejected").map((r) => r.reason.message);
+            if (missing.length) {
+              throw new Error(`Gambar marker tidak ditemukan: ${missing.join(", ")}. Pastikan folder Markers berada di samping file HTML ini (huruf besar/kecil berpengaruh).`);
+            }
+
+            setupStatus.textContent = "Menganalisis 9 gambar marker...";
+            const compiler = new Compiler();
+            await compiler.compileImageTargets(images, (progress) => {
+              const percent = Math.max(0, Math.min(100, Math.round(progress)));
+              setProgress(percent);
+              startButton.textContent = `Menyiapkan marker ${percent}%`;
+            });
+            const targetData = await compiler.exportData();
+            targetUrl = URL.createObjectURL(new Blob([targetData], { type: "application/octet-stream" }));
+            setProgress(100);
+
+            setupStatus.textContent = "Memuat model dan tekstur 3D...";
+            try {
+              await waitForScene(40000);
+              const broken = findBrokenTextures();
+              if (broken.length) {
+                showMessage(`Tekstur tidak ditemukan: ${broken.join(", ")}. Planet terkait akan tampil polos. Periksa folder Assets/textures.`, "warning");
+              }
+            } catch (sceneError) {
+              showMessage(sceneError.message, "warning");
+            }
+
+            setButton("ready", "Mulai AR", false);
+            setupStatus.textContent = "Marker siap. Tekan Mulai AR untuk membuka kamera.";
+          } catch (error) {
+            setButton("reload", "Muat ulang halaman", false);
+            setupStatus.textContent = "Persiapan AR tidak berhasil.";
+            const reason = error.message || "Terjadi kesalahan saat menyiapkan marker.";
+            showMessage(isFileProtocol ? `${reason} ${FILE_HINT}` : reason, "error");
+          }
+        }
+
+        // ---------- Kamera AR ----------
 
         // mindar-image hanya membaca imageTargetSrc saat init, jadi
         // setelah kompilasi, URL harus diberikan langsung ke system.
@@ -750,7 +1241,11 @@
             }, 45000);
 
             try {
-              arSystem.start();
+              // start() bisa mengembalikan Promise; tangkap penolakannya agar tidak menjadi error tak tertangani
+              Promise.resolve(arSystem.start()).catch((error) => {
+                cleanup();
+                reject(error);
+              });
             } catch (error) {
               cleanup();
               reject(error);
@@ -758,47 +1253,38 @@
           });
         }
 
-        async function prepareTargets() {
-          try {
-            const Compiler = window.__MindARCompiler
-              || (window.MINDAR && window.MINDAR.IMAGE && window.MINDAR.IMAGE.Compiler);
-            if (!Compiler) {
-              throw new Error("Library AR tidak berhasil dimuat. Periksa koneksi internet lalu muat ulang halaman.");
-            }
+        function resetTracking() {
+          confirmTimers.forEach((timerId) => window.clearTimeout(timerId));
+          confirmTimers.clear();
+          confirmedTargets.clear();
+          document.querySelectorAll("[mindar-image-target]").forEach((target) => setContentVisible(target, false));
+          hideCard(SEARCHING_TEXT);
+        }
 
-            const images = markerIds.map((id) => document.getElementById(id));
-            await Promise.all(images.map(waitForImage));
-
-            setupStatus.textContent = "Menganalisis 9 gambar marker...";
-            const compiler = new Compiler();
-            await compiler.compileImageTargets(images, (progress) => {
-              const percent = Math.max(0, Math.min(100, Math.round(progress)));
-              progressBar.style.width = `${percent}%`;
-              setupStatus.textContent = `Menyiapkan marker... ${percent}%`;
-            });
-            const targetData = await compiler.exportData();
-            targetUrl = URL.createObjectURL(new Blob([targetData], { type: "application/octet-stream" }));
-
-            startButton.disabled = false;
-            startButton.textContent = "Mulai AR";
-            setupStatus.textContent = "Marker siap. Tekan Mulai AR untuk membuka kamera.";
-            progressBar.style.width = "100%";
-          } catch (error) {
-            setupStatus.textContent = "Persiapan AR tidak berhasil.";
-            errorMessage.textContent = error.message || "Terjadi kesalahan saat menyiapkan marker.";
-            startButton.disabled = true;
-          }
+        function stopAR() {
+          const arSystem = scene.systems["mindar-image-system"];
+          try { if (arSystem && arRunning) arSystem.stop(); } catch (_) { /* kamera sudah berhenti */ }
+          arRunning = false;
+          resetTracking();
+          scannerUi.classList.remove("is-visible");
+          welcomeScreen.classList.remove("is-hidden");
+          setButton("ready", "Mulai AR", false);
+          setupStatus.textContent = "Kamera ditutup. Tekan Mulai AR untuk memindai lagi.";
         }
 
         startButton.addEventListener("click", async () => {
-          errorMessage.textContent = "";
-          startButton.disabled = true;
-          startButton.textContent = "Memulai kamera...";
+          if (mode === "reload") {
+            window.location.reload();
+            return;
+          }
+          if (mode !== "ready") return;
+
+          showMessage("");
+          setButton("starting", "Membuka kamera...", true);
 
           if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            errorMessage.textContent = "Kamera memerlukan halaman HTTPS atau localhost. Buka halaman ini melalui server lokal atau hosting HTTPS.";
-            startButton.disabled = false;
-            startButton.textContent = "Coba Mulai AR";
+            showMessage("Kamera memerlukan halaman HTTPS atau localhost. Buka halaman ini melalui server lokal atau hosting HTTPS.", "error");
+            setButton("ready", "Coba lagi", false);
             return;
           }
 
@@ -807,35 +1293,42 @@
             if (!arSystem) throw new Error("Sistem AR belum siap. Muat ulang halaman dan coba lagi.");
             if (!targetUrl) throw new Error("Marker belum selesai disiapkan. Tunggu hingga proses selesai.");
 
-            setupStatus.textContent = "Memuat aset 3D...";
-            await waitForScene();
+            if (!scene.hasLoaded) {
+              setupStatus.textContent = "Memuat aset 3D...";
+              await waitForScene(15000);
+            }
             configureAR(arSystem);
 
             setupStatus.textContent = "Izinkan akses kamera di browser. Menunggu kamera siap...";
             await startAR(arSystem);
+
+            arRunning = true;
+            resetTracking();
             welcomeScreen.classList.add("is-hidden");
             scannerUi.classList.add("is-visible");
-            scanStatus.textContent = "Arahkan kamera ke salah satu marker.";
           } catch (error) {
             // Bersihkan sisa sesi kamera supaya percobaan ulang tidak membuat video ganda
             try { if (arSystem) arSystem.stop(); } catch (_) { /* belum sempat berjalan */ }
-            startButton.disabled = false;
-            startButton.textContent = "Coba Mulai AR";
+            arRunning = false;
+            setButton("ready", "Coba lagi", false);
             setupStatus.textContent = "Marker siap. Tekan tombol untuk mencoba lagi.";
-            errorMessage.textContent = error.name === "NotAllowedError"
+            showMessage(error.name === "NotAllowedError"
               ? "Izin kamera ditolak. Izinkan akses kamera di pengaturan browser, lalu coba lagi."
-              : (error.message || "Kamera tidak dapat dimulai. Pastikan tidak sedang digunakan aplikasi lain.");
+              : (error.message || "Kamera tidak dapat dimulai. Pastikan tidak sedang digunakan aplikasi lain."), "error");
           }
         });
 
-        function logDebug(message) {
-          if (!debugEnabled) return;
-          const time = (performance.now() / 1000).toFixed(1).padStart(6, " ");
-          debugLines.unshift(`${time}s  ${message}`);
-          debugLines.length = Math.min(debugLines.length, 8);
-          debugPanel.textContent = debugLines.join("\n");
-          debugPanel.hidden = false;
-        }
+        stopButton.addEventListener("click", stopAR);
+
+        // Setelah pindah tab atau aplikasi, sebagian browser menjeda video kamera
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState !== "visible" || !arRunning) return;
+          const arSystem = scene.systems["mindar-image-system"];
+          const video = arSystem && arSystem.video;
+          if (video && video.paused) video.play().catch(() => {});
+        });
+
+        // ---------- Deteksi marker ----------
 
         // Konten 3D disembunyikan sampai marker terbukti stabil,
         // sehingga deteksi palsu sesaat tidak menampilkan planet yang salah.
@@ -843,61 +1336,25 @@
           Array.from(target.children).forEach((child) => child.setAttribute("visible", visible));
         }
 
-        function refreshCard() {
-          const latest = Array.from(confirmedTargets).pop();
-          if (latest) {
-            showPlanet(latest);
-          } else {
-            planetCard.hidden = true;
-            scanStatus.textContent = "Marker tidak terlihat. Arahkan kamera ke marker planet.";
-          }
-        }
-
-        // Marker yang berkali-kali muncul lalu hilang sebelum stabil dianggap
-        // sering salah deteksi, sehingga waktu konfirmasinya diperpanjang otomatis.
-        function confirmDelay(key) {
-          const record = falseAlarms.get(key);
-          if (!record) return BASE_CONFIRM_MS;
-          if (performance.now() - record.last > PENALTY_RESET_MS) {
-            falseAlarms.delete(key);
-            return BASE_CONFIRM_MS;
-          }
-          return Math.min(MAX_CONFIRM_MS, BASE_CONFIRM_MS + record.count * PENALTY_STEP_MS);
-        }
-
         document.querySelectorAll("[mindar-image-target]").forEach((target) => {
           const key = target.dataset.planet;
           setContentVisible(target, false);
 
           target.addEventListener("targetFound", () => {
-            const delay = confirmDelay(key);
-            logDebug(`found   ${key} (konfirmasi ${delay} ms)`);
             window.clearTimeout(confirmTimers.get(key));
             confirmTimers.set(key, window.setTimeout(() => {
               confirmTimers.delete(key);
-              falseAlarms.delete(key);
               confirmedTargets.add(key);
               setContentVisible(target, true);
-              logDebug(`TAMPIL  ${key}`);
               refreshCard();
-            }, delay));
+            }, CONFIRM_MS));
           });
 
           target.addEventListener("targetLost", () => {
-            const wasPending = confirmTimers.has(key);
             window.clearTimeout(confirmTimers.get(key));
             confirmTimers.delete(key);
             confirmedTargets.delete(key);
             setContentVisible(target, false);
-            if (wasPending) {
-              const record = falseAlarms.get(key) || { count: 0, last: 0 };
-              record.count += 1;
-              record.last = performance.now();
-              falseAlarms.set(key, record);
-              logDebug(`ABAIKAN ${key} (hilang sebelum stabil, #${record.count})`);
-            } else {
-              logDebug(`lost    ${key}`);
-            }
             refreshCard();
           });
         });
