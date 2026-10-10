@@ -446,10 +446,78 @@
         }
       }
 
-      .planet-card {
+      .scanner-bottom {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
         width: min(100%, 460px);
-        max-height: min(46vh, 390px);
         margin-inline: auto;
+      }
+
+      .picker {
+        display: flex;
+        gap: 8px;
+        margin: 0;
+        padding: 2px 2px 4px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        pointer-events: auto;
+      }
+
+      .picker::-webkit-scrollbar {
+        display: none;
+      }
+
+      .picker-item {
+        position: relative;
+        flex: none;
+        display: grid;
+        justify-items: center;
+        gap: 3px;
+        width: 62px;
+        padding: 6px 0 5px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(11, 14, 36, 0.82);
+        color: var(--soft);
+        font-size: 0.68rem;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+
+      .picker-item img {
+        width: 34px;
+        height: 34px;
+        border: 2px solid transparent;
+        border-radius: 50%;
+        object-fit: cover;
+        background: var(--raised);
+      }
+
+      .picker-item.is-active {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+
+      .picker-item.is-active img {
+        border-color: var(--accent);
+      }
+
+      .picker-item.is-correct::after {
+        content: "\2713";
+        position: absolute;
+        top: 2px;
+        right: 6px;
+        color: #7be29a;
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+
+      .planet-card {
+        width: 100%;
+        max-height: min(40vh, 340px);
+        margin: 0;
         padding: 18px 16px 14px;
         overflow-y: auto;
         overscroll-behavior: contain;
@@ -464,9 +532,26 @@
 
       .planet-head {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
+      }
+
+      .planet-id {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .planet-thumb {
+        flex: none;
+        width: 52px;
+        height: 52px;
+        border: 2px solid var(--accent);
+        border-radius: 50%;
+        object-fit: cover;
+        background: var(--raised);
       }
 
       .planet-head h2 {
@@ -542,13 +627,88 @@
         color: var(--accent);
       }
 
+      .quiz {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+
+      .quiz-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .quiz-head strong {
+        color: var(--accent);
+        font-size: 0.86rem;
+      }
+
+      #quiz-score {
+        color: var(--muted);
+        font-size: 0.76rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #quiz-question {
+        margin: 0 0 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
+      .quiz-options {
+        display: grid;
+        gap: 6px;
+      }
+
+      .quiz-option {
+        width: 100%;
+        min-height: 44px;
+        padding: 9px 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font-size: 0.86rem;
+        line-height: 1.35;
+        text-align: left;
+      }
+
+      .quiz-option:disabled {
+        cursor: default;
+      }
+
+      .quiz-option.is-correct {
+        border-color: #7be29a;
+        background: rgba(123, 226, 154, 0.14);
+      }
+
+      .quiz-option.is-wrong {
+        border-color: #ff9f9f;
+        background: rgba(255, 159, 159, 0.12);
+      }
+
+      .quiz-feedback {
+        margin: 8px 0 0;
+        color: var(--soft);
+        font-size: 0.82rem;
+        line-height: 1.45;
+      }
+
+      .quiz-feedback:empty {
+        display: none;
+      }
+
       @media (max-height: 520px) {
         .facts {
           grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
         .planet-card {
-          max-height: 56vh;
+          max-height: 44vh;
         }
       }
 
@@ -698,7 +858,7 @@
           <ol class="steps">
             <li>Tekan Mulai AR dan izinkan akses kamera.</li>
             <li>Arahkan kamera ke salah satu kartu marker.</li>
-            <li>Baca fakta planetnya di kartu yang muncul.</li>
+            <li>Baca faktanya, lalu jawab kuis singkat di kartu.</li>
           </ol>
           <ul class="legend" aria-label="Marker yang didukung">
             <li style="--c: #ffb938">Matahari</li>
@@ -721,7 +881,7 @@
     <div id="scanner-ui">
       <div class="scanner-top">
         <span class="scan-dot" aria-hidden="true"></span>
-        <span id="scan-status" role="status">Arahkan kamera ke salah satu kartu marker.</span>
+        <span id="scan-status" role="status">Arahkan kamera ke kartu marker, atau pilih planet di bawah.</span>
         <button id="music-button" class="chip-button" type="button" aria-pressed="true" aria-label="Musik latar" hidden>Musik</button>
         <button id="stop-button" class="chip-button" type="button" aria-label="Tutup kamera">Tutup</button>
       </div>
@@ -730,20 +890,37 @@
         <div class="reticle-frame"><i></i><i></i><i></i><i></i></div>
       </div>
 
-      <section id="planet-card" class="planet-card" hidden>
-        <div class="planet-head">
-          <div>
-            <h2 id="planet-name"></h2>
-            <p id="planet-type"></p>
+      <div class="scanner-bottom">
+        <nav id="planet-picker" class="picker" aria-label="Katalog planet"></nav>
+
+        <section id="planet-card" class="planet-card" hidden>
+          <div class="planet-head">
+            <div class="planet-id">
+              <img id="planet-image" class="planet-thumb" alt="" width="52" height="52">
+              <div>
+                <h2 id="planet-name"></h2>
+                <p id="planet-type"></p>
+              </div>
+            </div>
+            <button id="card-toggle" class="chip-button" type="button" aria-expanded="true" aria-controls="planet-body">Ringkas</button>
           </div>
-          <button id="card-toggle" class="chip-button" type="button" aria-expanded="true" aria-controls="planet-body">Ringkas</button>
-        </div>
-        <div id="planet-body" class="planet-body">
-          <p id="planet-description"></p>
-          <dl id="planet-facts" class="facts"></dl>
-          <p class="fun"><strong>Tahukah kamu?</strong><span id="planet-fun-text"></span></p>
-        </div>
-      </section>
+          <div id="planet-body" class="planet-body">
+            <p id="planet-description"></p>
+            <dl id="planet-facts" class="facts"></dl>
+            <p class="fun"><strong>Tahukah kamu?</strong><span id="planet-fun-text"></span></p>
+
+            <section class="quiz" aria-labelledby="quiz-title">
+              <div class="quiz-head">
+                <strong id="quiz-title">Kuis singkat</strong>
+                <span id="quiz-score"></span>
+              </div>
+              <p id="quiz-question"></p>
+              <div id="quiz-options" class="quiz-options"></div>
+              <p id="quiz-feedback" class="quiz-feedback" role="status"></p>
+            </section>
+          </div>
+        </section>
+      </div>
     </div>
 
     <div id="target-images" hidden aria-hidden="true">
@@ -985,6 +1162,51 @@
           }
         };
 
+        // Gambar untuk UI (miniatur planet) dan soal kuis per planet
+        const sunImage = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="40%" cy="38%" r="70%"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".55" stop-color="#ffb938"/><stop offset="1" stop-color="#f08a1c"/></radialGradient></defs><circle cx="32" cy="32" r="32" fill="url(#g)"/></svg>')}`;
+        const dotImage = (color) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${color}"/></svg>`)}`;
+        const texture = (name) => `./Assets/textures/${name}_baseColor.jpeg`;
+
+        const extras = {
+          sun: {
+            image: sunImage,
+            quiz: { q: "Berapa lama cahaya Matahari sampai ke Bumi?", options: ["Sekitar 8 menit 20 detik", "Sekitar 8 jam", "Sekitar 1 detik"], answer: 0 }
+          },
+          mercury: {
+            image: texture("mercury"),
+            quiz: { q: "Berapa lama satu tahun (revolusi) di Merkurius?", options: ["365 hari Bumi", "88 hari Bumi", "176 hari Bumi"], answer: 1 }
+          },
+          venus: {
+            image: texture("venus"),
+            quiz: { q: "Mengapa Venus lebih panas daripada Merkurius?", options: ["Letaknya lebih dekat ke Matahari", "Tidak memiliki atmosfer", "Efek rumah kaca dari atmosfer yang tebal"], answer: 2 }
+          },
+          earth: {
+            image: texture("earth"),
+            quiz: { q: "Apa penyebab terjadinya pergantian musim di Bumi?", options: ["Jarak Bumi ke Matahari berubah-ubah", "Kemiringan sumbu Bumi sekitar 23,4°", "Bulan menghalangi cahaya Matahari"], answer: 1 }
+          },
+          mars: {
+            image: texture("mars"),
+            quiz: { q: "Mengapa Mars tampak berwarna merah?", options: ["Permukaannya kaya besi oksida (karat)", "Tertutup lautan lava", "Atmosfernya penuh gas amonia"], answer: 0 }
+          },
+          jupiter: {
+            image: texture("jupiter"),
+            quiz: { q: "Kira-kira berapa lama satu hari di Jupiter?", options: ["Sekitar 24 jam", "Sekitar 10 jam", "Sekitar 3 hari"], answer: 1 }
+          },
+          saturn: {
+            image: texture("saturn"),
+            quiz: { q: "Cincin Saturnus terutama tersusun dari apa?", options: ["Gas hidrogen", "Logam cair", "Kepingan es dan batu"], answer: 2 }
+          },
+          uranus: {
+            image: texture("uranus"),
+            quiz: { q: "Berapa kemiringan sumbu rotasi Uranus?", options: ["Sekitar 23°", "Sekitar 98°", "Hampir 0°"], answer: 1 }
+          },
+          neptune: {
+            image: texture("neptune"),
+            quiz: { q: "Pada tahun berapa Neptunus ditemukan?", options: ["1781", "1930", "1846"], answer: 2 }
+          }
+        };
+        Object.keys(extras).forEach((key) => Object.assign(planets[key], extras[key]));
+
         const markerIds = [
           "target-sun", "target-mercury", "target-venus", "target-earth", "target-mars",
           "target-jupiter", "target-saturn", "target-uranus", "target-neptune"
@@ -1008,9 +1230,15 @@
         const scene = $("ar-scene");
         const sunModel = $("sun-model");
         const musicButton = $("music-button");
+        const picker = $("planet-picker");
+        const planetImage = $("planet-image");
+        const quizScore = $("quiz-score");
+        const quizQuestion = $("quiz-question");
+        const quizOptions = $("quiz-options");
+        const quizFeedback = $("quiz-feedback");
 
         const CONFIRM_MS = 450; // marker harus terdeteksi stabil selama ini sebelum konten tampil
-        const SEARCHING_TEXT = "Arahkan kamera ke salah satu kartu marker.";
+        const SEARCHING_TEXT = "Arahkan kamera ke kartu marker, atau pilih planet di bawah.";
         const FILE_HINT = "Halaman ini dibuka langsung dari file (file://), sehingga browser memblokir pemuatan model dan tekstur. Jalankan lewat server lokal, misalnya `python -m http.server` lalu buka http://localhost:8000, atau unggah ke hosting HTTPS.";
         const isFileProtocol = location.protocol === "file:";
         const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1022,6 +1250,9 @@
         let arRunning = false;
         let currentKey = null;
         let sunModelFailed = false;
+        let pinnedKey = null; // planet yang dipilih manual lewat katalog
+        const answers = {};   // jawaban kuis: key -> indeks pilihan
+        const pickerItems = {};
 
         // ---------- Pembantu UI ----------
 
@@ -1090,43 +1321,138 @@
 
         // ---------- Kartu info planet ----------
 
-        function showPlanet(key) {
+        function renderQuiz(key) {
+          const quiz = planets[key].quiz;
+          const chosen = answers[key];
+          quizQuestion.textContent = quiz.q;
+          quizOptions.replaceChildren(...quiz.options.map((text, index) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "quiz-option";
+            button.textContent = text;
+            if (chosen !== undefined) {
+              button.disabled = true;
+              if (index === quiz.answer) button.classList.add("is-correct");
+              else if (index === chosen) button.classList.add("is-wrong");
+            } else {
+              button.addEventListener("click", () => {
+                answers[key] = index;
+                renderQuiz(key);
+                updatePicker();
+              });
+            }
+            return button;
+          }));
+
+          if (chosen === undefined) {
+            quizFeedback.textContent = "";
+          } else if (chosen === quiz.answer) {
+            quizFeedback.textContent = "Benar! Jawabanmu tepat.";
+          } else {
+            quizFeedback.textContent = `Kurang tepat. Jawaban yang benar: ${quiz.options[quiz.answer]}.`;
+          }
+          updateScore();
+        }
+
+        function updateScore() {
+          const keys = Object.keys(planets);
+          const answered = keys.filter((key) => answers[key] !== undefined).length;
+          const correct = keys.filter((key) => answers[key] === planets[key].quiz.answer).length;
+          quizScore.textContent = answered === keys.length
+            ? `Selesai, skor ${correct}/${keys.length}`
+            : `Skor ${correct}/${keys.length}`;
+        }
+
+        function updatePicker() {
+          Object.keys(pickerItems).forEach((key) => {
+            const item = pickerItems[key];
+            item.classList.toggle("is-active", key === currentKey);
+            item.classList.toggle("is-correct", answers[key] === planets[key].quiz.answer);
+            item.setAttribute("aria-pressed", String(key === pinnedKey));
+          });
+        }
+
+        // Katalog: ketuk planet untuk membaca infonya tanpa marker; ketuk lagi untuk melepas.
+        Object.keys(planets).forEach((key) => {
+          const planet = planets[key];
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "picker-item";
+          item.setAttribute("aria-pressed", "false");
+
+          const thumb = new Image();
+          thumb.alt = "";
+          thumb.decoding = "async";
+          thumb.addEventListener("error", () => { thumb.src = dotImage(planet.color); }, { once: true });
+          thumb.src = planet.image;
+
+          const label = document.createElement("span");
+          label.textContent = planet.name;
+          item.append(thumb, label);
+          item.addEventListener("click", () => {
+            pinnedKey = pinnedKey === key ? null : key;
+            refreshCard();
+          });
+          pickerItems[key] = item;
+          picker.append(item);
+        });
+
+        function showPlanet(key, pinned) {
           const planet = planets[key];
           if (!planet) return;
 
           scannerUi.style.setProperty("--accent", planet.color);
           scannerUi.style.setProperty("--accent-soft", `${planet.color}33`);
 
-          planetName.textContent = planet.name;
-          planetType.textContent = planet.type;
-          planetDescription.textContent = planet.description;
-          planetFunText.textContent = planet.fun;
-          planetFacts.replaceChildren(...planet.facts.map(([label, value]) => {
-            const item = document.createElement("div");
-            item.className = "fact";
-            const term = document.createElement("dt");
-            term.textContent = label;
-            const detail = document.createElement("dd");
-            detail.textContent = value;
-            item.append(term, detail);
-            return item;
-          }));
-
           const changed = currentKey !== key;
           planetCard.hidden = false;
-          planetCard.scrollTop = 0;
-          scannerUi.classList.add("is-found");
-          scanStatus.textContent = key === "sun" && sunModelFailed
-            ? "Marker Matahari terdeteksi, tetapi model 3D gagal dimuat."
-            : `Marker ${planet.name} terdeteksi`;
 
-          if (changed && !reduceMotion && planetCard.animate) {
-            planetCard.animate(
-              [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
-              { duration: 220, easing: "ease-out" }
-            );
+          if (changed) {
+            planetName.textContent = planet.name;
+            planetType.textContent = planet.type;
+            planetDescription.textContent = planet.description;
+            planetFunText.textContent = planet.fun;
+            planetImage.alt = `Gambar ${planet.name}`;
+            planetImage.onerror = () => {
+              planetImage.onerror = null;
+              planetImage.src = dotImage(planet.color);
+            };
+            planetImage.src = planet.image;
+            planetFacts.replaceChildren(...planet.facts.map(([label, value]) => {
+              const item = document.createElement("div");
+              item.className = "fact";
+              const term = document.createElement("dt");
+              term.textContent = label;
+              const detail = document.createElement("dd");
+              detail.textContent = value;
+              item.append(term, detail);
+              return item;
+            }));
+            renderQuiz(key);
+            planetCard.scrollTop = 0;
           }
+
+          scannerUi.classList.add("is-found");
+          if (pinned) {
+            scanStatus.textContent = `Katalog: ${planet.name}`;
+          } else if (key === "sun" && sunModelFailed) {
+            scanStatus.textContent = "Marker Matahari terdeteksi, tetapi model 3D gagal dimuat.";
+          } else {
+            scanStatus.textContent = `Marker ${planet.name} terdeteksi`;
+          }
+
           currentKey = key;
+          updatePicker();
+
+          if (changed) {
+            pickerItems[key].scrollIntoView({ inline: "center", block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+            if (!reduceMotion && planetCard.animate) {
+              planetCard.animate(
+                [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
+                { duration: 220, easing: "ease-out" }
+              );
+            }
+          }
         }
 
         function hideCard(message) {
@@ -1134,12 +1460,14 @@
           currentKey = null;
           scannerUi.classList.remove("is-found");
           scanStatus.textContent = message;
+          updatePicker();
         }
 
         function refreshCard() {
-          const latest = Array.from(confirmedTargets).pop();
-          if (latest) {
-            showPlanet(latest);
+          const marker = Array.from(confirmedTargets).pop();
+          const key = pinnedKey || marker;
+          if (key) {
+            showPlanet(key, Boolean(pinnedKey));
           } else {
             hideCard("Marker tidak terlihat. Arahkan kamera kembali ke kartu.");
           }
@@ -1308,6 +1636,7 @@
           confirmTimers.forEach((timerId) => window.clearTimeout(timerId));
           confirmTimers.clear();
           confirmedTargets.clear();
+          pinnedKey = null;
           document.querySelectorAll("[mindar-image-target]").forEach((target) => setContentVisible(target, false));
           hideCard(SEARCHING_TEXT);
         }
@@ -1407,6 +1736,7 @@
             confirmTimers.set(key, window.setTimeout(() => {
               confirmTimers.delete(key);
               confirmedTargets.add(key);
+              pinnedKey = null; // marker yang baru terdeteksi menggantikan pilihan manual
               setContentVisible(target, true);
               refreshCard();
             }, CONFIRM_MS));
