@@ -391,6 +391,11 @@
         pointer-events: auto;
       }
 
+      .chip-button[aria-pressed="false"] {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+
       .reticle {
         position: absolute;
         inset: 0;
@@ -717,6 +722,7 @@
       <div class="scanner-top">
         <span class="scan-dot" aria-hidden="true"></span>
         <span id="scan-status" role="status">Arahkan kamera ke salah satu kartu marker.</span>
+        <button id="music-button" class="chip-button" type="button" aria-pressed="true" aria-label="Musik latar" hidden>Musik</button>
         <button id="stop-button" class="chip-button" type="button" aria-label="Tutup kamera">Tutup</button>
       </div>
 
@@ -1001,6 +1007,7 @@
         const cardToggle = $("card-toggle");
         const scene = $("ar-scene");
         const sunModel = $("sun-model");
+        const musicButton = $("music-button");
 
         const CONFIRM_MS = 450; // marker harus terdeteksi stabil selama ini sebelum konten tampil
         const SEARCHING_TEXT = "Arahkan kamera ke salah satu kartu marker.";
@@ -1035,6 +1042,50 @@
 
         sunModel.addEventListener("model-error", () => {
           sunModelFailed = true;
+        });
+
+        // ---------- Musik latar ----------
+
+        const music = new Audio("./Assets/Stargazing.mp3");
+        music.loop = true;
+        music.preload = "auto";
+        music.volume = 0.6;
+        let musicMuted = false; // pilihan pengguna lewat tombol Musik
+        let musicBroken = false;
+
+        music.addEventListener("error", () => {
+          musicBroken = true;
+          musicButton.hidden = true;
+        });
+
+        // Browser hanya mengizinkan audio setelah ada interaksi pengguna. Izin kamera bisa memakan
+        // waktu lama sehingga "sentuhan" itu kedaluwarsa, jadi elemen audio dibuka dulu saat tombol ditekan.
+        function unlockMusic() {
+          if (musicBroken) return;
+          music.muted = true;
+          music.play().then(() => {
+            music.pause();
+            music.currentTime = 0;
+            music.muted = false;
+          }).catch(() => { music.muted = false; });
+        }
+
+        function playMusic() {
+          if (musicBroken || musicMuted) return;
+          music.muted = false;
+          music.play().catch(() => {});
+        }
+
+        function stopMusic() {
+          music.pause();
+          music.currentTime = 0;
+        }
+
+        musicButton.addEventListener("click", () => {
+          musicMuted = !musicMuted;
+          musicButton.setAttribute("aria-pressed", String(!musicMuted));
+          if (musicMuted) music.pause();
+          else playMusic();
         });
 
         // ---------- Kartu info planet ----------
@@ -1265,6 +1316,8 @@
           const arSystem = scene.systems["mindar-image-system"];
           try { if (arSystem && arRunning) arSystem.stop(); } catch (_) { /* kamera sudah berhenti */ }
           arRunning = false;
+          stopMusic();
+          musicButton.hidden = true;
           resetTracking();
           scannerUi.classList.remove("is-visible");
           welcomeScreen.classList.remove("is-hidden");
@@ -1281,6 +1334,7 @@
 
           showMessage("");
           setButton("starting", "Membuka kamera...", true);
+          unlockMusic();
 
           if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             showMessage("Kamera memerlukan halaman HTTPS atau localhost. Buka halaman ini melalui server lokal atau hosting HTTPS.", "error");
@@ -1306,10 +1360,13 @@
             resetTracking();
             welcomeScreen.classList.add("is-hidden");
             scannerUi.classList.add("is-visible");
+            musicButton.hidden = musicBroken;
+            playMusic(); // lagu mulai setelah kamera berhasil diakses
           } catch (error) {
             // Bersihkan sisa sesi kamera supaya percobaan ulang tidak membuat video ganda
             try { if (arSystem) arSystem.stop(); } catch (_) { /* belum sempat berjalan */ }
             arRunning = false;
+            stopMusic();
             setButton("ready", "Coba lagi", false);
             setupStatus.textContent = "Marker siap. Tekan tombol untuk mencoba lagi.";
             showMessage(error.name === "NotAllowedError"
@@ -1322,7 +1379,12 @@
 
         // Setelah pindah tab atau aplikasi, sebagian browser menjeda video kamera
         document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState !== "visible" || !arRunning) return;
+          if (!arRunning) return;
+          if (document.visibilityState === "hidden") {
+            music.pause();
+            return;
+          }
+          playMusic();
           const arSystem = scene.systems["mindar-image-system"];
           const video = arSystem && arSystem.video;
           if (video && video.paused) video.play().catch(() => {});
